@@ -5,7 +5,7 @@ import Insight from '../models/Insight.js';
 import Alert from '../models/Alert.js';
 import AdminLog from '../models/AdminLog.js';
 import UploadLog from '../models/UploadLog.js';
-import { callGeminiJSON, getModel } from '../services/geminiService.js';
+import { callGeminiJSON, callGeminiWithParts } from '../services/geminiService.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 // import nodemailer from 'nodemailer';
@@ -998,8 +998,7 @@ export const transcribeAudio = async (req, res) => {
       mimeType = 'audio/webm'; 
     }
 
-    const model = await getModel();
-    const result = await model.generateContent([
+    const text = await callGeminiWithParts([
       "You are a highly precise dictation assistant. Transcribe the following audio accurately. Output ONLY the raw transcript text. Do not add quotes, introductory text, or descriptions. If there is no speech, output nothing.",
       {
         inlineData: {
@@ -1009,7 +1008,6 @@ export const transcribeAudio = async (req, res) => {
       }
     ]);
     
-    let text = result?.response?.text?.() || '';
     res.json({ text: text.trim() });
   } catch (err) {
     console.error('[TranscribeAudio]', err);

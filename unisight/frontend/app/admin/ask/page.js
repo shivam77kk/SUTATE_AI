@@ -113,8 +113,10 @@ export default function AskPage() {
   // Voice Response ON by default so TTS plays immediately
   const [voiceMode, setVoiceMode] = useState(true);
   const [isListening, setIsListening]   = useState(false);
-  const [elevenLabsOk, setElevenLabsOk] = useState(null); // null=checking, true=ok, false=failed
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [elevenLabsOk, setElevenLabsOk] = useState(null); 
   const recognitionRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const audioChunksRef = useRef([]);
   // Ref so mutationFn always reads the fresh value (avoids stale closure)
   const voiceModeRef  = useRef(true);
@@ -185,93 +187,79 @@ export default function AskPage() {
     mutation.mutate(text);
   };
 
-  // ── STT (Web Speech API) ─ Fully fixed for live typing and auto-send ────────
-  const initRecognition = () => {
-    if (typeof window === 'undefined') return null;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
-
-    const recognition = new SR();
-    // Using en-US allows Google's most advanced speech models to load faster
-    recognition.lang = 'en-US';
-    // continuous: false means it waits for you to finish your sentence/pause, 
-    // and then automatically triggers onend to submit!
-    recognition.continuous = false;        
-    recognition.interimResults = true;     // Enables live typing
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      console.log('[STT] Recognition started');
-      setIsListening(true);
-      queryRef.current = '';
-      setQuery('');
-    };
-
-    recognition.onresult = (event) => {
-      let finalText = '';
-      let interimText = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += t;
-        } else {
-          interimText += t;
-        }
-      }
-      // Properly join final sentences with the currently spoken words
-      const displayText = finalText + interimText;
-      console.log('[STT] Result:', { finalText, interimText, displayText });
-      if (displayText) {
-        queryRef.current = displayText;
-        setQuery(displayText);
-      }
-    };
-
-    recognition.onend = () => {
-      console.log('[STT] Recognition ended. Final query:', queryRef.current);
-      setIsListening(false);
-      // Auto-submit automatically when the mic detects silence
-      if (queryRef.current.trim()) {
-        toast.success('Voice captured! Submitting...', { duration: 2000 });
-        setTimeout(() => submitVoiceQuery.current(queryRef.current), 300);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error('[STT] Error:', event.error);
-      setIsListening(false);
-      if (event.error === 'no-speech') {
-        toast('No speech detected. Please speak closer to the microphone.', { icon: '🎤', duration: 3000 });
-      } else if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied. Please allow mic in browser settings.');
-      } else if (event.error !== 'aborted') {
-        toast.error('Speech recognition error: ' + event.error);
-      }
-    };
-
-    return recognition;
-  };
-
-  const toggleMic = () => {
+  // ── Robust STT (MediaRecorder + Backend Gemini Transcription) ─────────────
+  const toggleMic = async () => {
+    // If recording, STOP and transcribe
     if (isListening) {
-      // Force manually stop if clicked again
-      if (recognitionRef.current) {
+      if (recognitionRef.current && recognitionRef.current.state === 'recording') {
         recognitionRef.current.stop();
       }
-    } else {
-      const recognition = initRecognition();
-      if (!recognition) {
-        toast.error('Speech recognition not supported in this browser. Use Chrome.');
-        return;
-      }
-      recognitionRef.current = recognition;
-      try {
-        recognition.start();
-        toast('🎤 Speak your question now...', { duration: 3000 });
-      } catch (err) {
-        console.error('[STT] Start failed:', err);
-        toast.error('Could not start speech recognition.');
-      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      recognitionRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstart = () => {
+        setIsListening(true);
+        queryRef.current = '';
+        setQuery('');
+        toast('🎙️ Recording... click mic again to send.', { icon: '🎤', duration: 4000 });
+      };
+
+      mediaRecorder.onstop = async () => {
+        setIsListening(false);
+        stream.getTracks().forEach(track => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        if (audioBlob.size < 1000) {
+          toast.error('Audio too short or empty');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'speech.webm');
+        
+        setIsTranscribing(true);
+        const toastId = toast.loading('Transcribing audio securely...');
+
+        try {
+          const res = await api.post('/admin/transcribe', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 30000
+          });
+          toast.dismiss(toastId);
+
+          if (res.data?.text && res.data.text.trim()) {
+            const t = res.data.text.trim();
+            setQuery(t);
+            queryRef.current = t;
+            toast.success('Voice captured!');
+            // Auto submit
+            setTimeout(() => submitVoiceQuery.current(t), 300);
+          } else {
+            toast.error('Speech not recognized. Please try again.');
+          }
+        } catch (err) {
+          toast.dismiss(toastId);
+          console.error('[Transcribe Error]', err);
+          toast.error('Transcription failed: ' + (err.response?.data?.error || err.message));
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+    } catch (err) {
+      console.error('[Mic Error]', err);
+      toast.error('Microphone access denied or not available.');
     }
   };
 
@@ -319,13 +307,30 @@ export default function AskPage() {
         </div>
 
         {/* Input Row */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'flex-start', position: 'relative' }}>
+          {/* Transcribing Overlay */}
+          {isTranscribing && (
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.7)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 16, zIndex: 10, color: '#93c5fd', fontWeight: 600
+            }}>
+              <span className="spinner" style={{ marginBottom: 12, borderTopColor: '#93c5fd' }}></span>
+              Transcribing securely...
+            </div>
+          )}
+
           <textarea
-            value={query}
-            onChange={e => syncQuery(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder={isListening ? '🎙️ Listening…' : 'e.g. Which department has the most dropouts?'}
             className="input-field flex-1"
+            placeholder={isListening ? "Recording... (speak clearly then click the mic to send)" : "Type your query here, e.g., 'Which department has the most dropouts?'"}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              queryRef.current = e.target.value;
+            }}
+            onKeyDown={handleKey}
             style={{
               resize: 'none', height: 56, lineHeight: 1.5,
               paddingTop: 14, fontSize: 15,
@@ -378,19 +383,13 @@ export default function AskPage() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               style={{
-                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-                borderRadius: 10, padding: '8px 14px', marginBottom: 12,
-                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 16px', background: 'rgba(244,63,94,0.1)', color: '#fca5a5',
+                borderRadius: 12, border: '1px solid rgba(244,63,94,0.2)', fontSize: 13,
+                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16
               }}
             >
-              <motion.div
-                animate={{ scale: [1, 1.4, 1] }}
-                transition={{ duration: 0.8, repeat: Infinity }}
-                style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }}
-              />
-              <span style={{ fontSize: 13, color: '#fca5a5', fontWeight: 500 }}>
-                Listening… Speak your question clearly, then click the mic again to stop.
-              </span>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444', animation: 'pulse 1.5s infinite' }} />
+              Recording in progress... Click the red mic button below when you are done speaking to submit!
             </motion.div>
           )}
         </AnimatePresence>

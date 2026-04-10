@@ -71,6 +71,26 @@ export async function callGemini(prompt, options = {}) {
   });
 }
 
+export async function callGeminiWithParts(parts, options = {}) {
+  return geminiQueue.add(async () => {
+    let retries = 0;
+    while (retries < FALLBACK_MODELS.length + 1) {
+      try {
+        const workingModel = await getModel();
+        const result = await workingModel.generateContent(parts);
+        const text = result?.response?.text?.() ?? '';
+        return text;
+      } catch (err) {
+        console.warn(`Gemini Parts call failed on ${activeModelName || 'unknown'}: ${err?.message || 'unknown'}`);
+        model = null;
+        activeModelName = null;
+        retries++;
+      }
+    }
+    throw new Error('All Gemini models failed for parts');
+  });
+}
+
 export function parseGeminiJSON(text) {
   if (typeof text !== 'string') text = JSON.stringify(text);
 
