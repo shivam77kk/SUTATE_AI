@@ -102,7 +102,11 @@ export const submitPollResponse = async (req, res) => {
 
 export const getPollResults = async (req, res) => {
   try {
-    const poll = await Poll.findOne({ pollId: req.params.pollId });
+    const pollIdParam = req.params.pollId;
+    const poll = await Poll.findOne({ 
+      $or: [{ pollId: pollIdParam }, { classId: pollIdParam, isActive: true }]
+    }).sort({ createdAt: -1 });
+    
     if (!poll) return res.status(404).json({ error: 'Poll not found' });
 
     const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };

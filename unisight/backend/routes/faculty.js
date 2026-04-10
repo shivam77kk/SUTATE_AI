@@ -13,5 +13,4 @@ router.get('/class/:id/report/pdf', fc.downloadClassReport);
 router.get('/student/:id/full-profile', fc.getStudentFullProfile);
 router.get('/class/:id/voice-summary', fc.getClassVoiceSummary);
 router.get('/effectiveness', fc.getFacultyEffectiveness);
-router.get('/effectiveness-history', fc.getFacultyEffectivenessHistory);
 export default router;

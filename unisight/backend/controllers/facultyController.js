@@ -537,34 +537,6 @@ Start with: "Here is your class summary."
 export const getFacultyEffectiveness = async (req, res) => {
   try {
     const facultyId = req.user.userId;
-    const insight = await TeacherInsight.findOne({ facultyId }).sort({ createdAt: -1 });
-    
-    if (!insight) {
-      return res.json({
-        overall: { score: 0, badge: 'New', studentPassRate: 0, avgImprovement: 0 },
-        history: []
-      });
-    }
-    
-    res.json({
-      overall: {
-        score: insight.effectivenessScore || 0,
-        badge: insight.effectivenessScore >= 85 ? 'Excellent' : insight.effectivenessScore >= 70 ? 'Good' : 'Developing',
-        studentPassRate: insight.classPassRate || 0,
-        avgImprovement: insight.scoreChangeVsPrevSem || 0
-      },
-      history: []
-    });
-  } catch (err) {
-    console.error('[FacultyEffectiveness]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-// GET /api/faculty/effectiveness-history
-export const getFacultyEffectivenessHistory = async (req, res) => {
-  try {
-    const facultyId = req.user.userId;
     const insights = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 }).limit(10);
     
     const history = insights.map((ins, idx) => ({
@@ -586,7 +558,7 @@ export const getFacultyEffectivenessHistory = async (req, res) => {
     
     res.json({ overall, history });
   } catch (err) {
-    console.error('[FacultyEffectivenessHistory]', err);
+    console.error('[FacultyEffectiveness]', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

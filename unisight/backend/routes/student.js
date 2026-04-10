@@ -22,4 +22,6 @@ router.post('/parent-contact', sc.updateParentContact);
 router.get('/longitudinal', sc.getLongitudinalData);
 router.get('/chat', sc.getChatHistory);
 router.post('/chat', geminiLimiter, sc.chatWithAI);
+router.post('/quiz/generate', geminiLimiter, sc.generateQuiz);
+router.post('/goals', sc.updateGoal);
 export default router;

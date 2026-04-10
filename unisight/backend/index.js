@@ -82,6 +82,7 @@ app.use('/api/mood', moodRoutes);
 app.use('/api/help-requests', helpRoutes);
 app.use('/api/help', helpRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin/notifications', notificationRoutes);
 app.use('/api/sheets', sheetsRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/interventions', interventionRoutes);

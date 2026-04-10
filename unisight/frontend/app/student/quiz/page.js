@@ -20,7 +20,7 @@ function QuizGame({ subject, onBack }) {
     const fetchQuestions = async () => {
       try {
         const prompt = `Generate 5 multiple choice questions for ${subject}. Return ONLY valid JSON array: [{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]. NO markdown, NO comments.`;
-        const { data } = await api.post('/student/chat', { message: prompt, history: [] });
+        const { data } = await api.post('/student/quiz/generate', { subject, prompt });
         let clean = data.reply.replace(/```json|```/gi, '').trim();
         const match = clean.match(/(\[[\s\S]*\])/)?.[0];
         if (match) {

@@ -7,5 +7,5 @@ const router = express.Router();
 router.post('/', authenticate, requireRole('student'), submitFeedback);
 router.get('/status/:uploadId', authenticate, requireRole('student'), getFeedbackStatus);
 router.get('/class/:classId', authenticate, requireRole('faculty', 'admin'), getClassFeedbackSummary);
-router.get('/overview', authenticate, requireRole('admin'), getAdminFeedbackOverview);
+router.get('/overview', authenticate, requireRole('admin', 'faculty'), getAdminFeedbackOverview);
 export default router;

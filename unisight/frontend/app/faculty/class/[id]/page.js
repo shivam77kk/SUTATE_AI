@@ -66,7 +66,7 @@ function PollPanel({ classId }) {
     if (!question.trim()) return;
     setLaunching(true);
     try {
-      await api.post('/polls/launch', { question, classId });
+      await api.post('/polls', { question, classId });
       setQuestion('');
       toast.success('Poll launched ✓');
     } catch { toast.error('Failed to launch poll'); }
