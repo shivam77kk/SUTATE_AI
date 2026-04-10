@@ -184,21 +184,24 @@ export default function AskPage() {
     mutation.mutate(text);
   };
 
-  // ── STT (Web Speech API) ─ simple single-utterance mode (Chrome reliable) ─
+  // ── STT (Web Speech API) ──────────────────────────────────────────────────
   const initRecognition = () => {
     if (typeof window === 'undefined') return null;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
 
     const recognition = new SR();
-    recognition.lang = 'en-IN';           // supports Indian English accent
-    recognition.continuous = false;        // single utterance = most reliable in Chrome
-    recognition.interimResults = true;     // live typing as user speaks
+    recognition.lang = 'en-US';            // Use en-US for max browser compatibility
+    recognition.continuous = true;         // Continuous to prevent abrupt stops
+    recognition.interimResults = true;     // Live typing as user speaks
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       console.log('[STT] Recognition started');
       setIsListening(true);
+      // Clear previous query when starting fresh voice input
+      queryRef.current = '';
+      setQuery('');
     };
 
     recognition.onaudiostart = () => {
@@ -212,6 +215,7 @@ export default function AskPage() {
     recognition.onresult = (event) => {
       let finalText = '';
       let interimText = '';
+      // Continuous mode appends to results, so we loop through all
       for (let i = 0; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -220,7 +224,8 @@ export default function AskPage() {
           interimText += t;
         }
       }
-      const displayText = finalText || interimText;
+      // CRITICAL FIX: Concatenate final and interim (was using || before which hid interim text)
+      const displayText = finalText + interimText;
       console.log('[STT] Result:', { finalText, interimText, displayText });
       if (displayText) {
         queryRef.current = displayText;
