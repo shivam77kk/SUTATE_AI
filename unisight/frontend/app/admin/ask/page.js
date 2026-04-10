@@ -115,6 +115,7 @@ export default function AskPage() {
   const [isListening, setIsListening]   = useState(false);
   const [elevenLabsOk, setElevenLabsOk] = useState(null); // null=checking, true=ok, false=failed
   const recognitionRef = useRef(null);
+  const audioChunksRef = useRef([]);
   // Ref so mutationFn always reads the fresh value (avoids stale closure)
   const voiceModeRef  = useRef(true);
   const queryRef      = useRef('');
@@ -184,101 +185,74 @@ export default function AskPage() {
     mutation.mutate(text);
   };
 
-  // ── STT (Web Speech API) ──────────────────────────────────────────────────
-  const initRecognition = () => {
-    if (typeof window === 'undefined') return null;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
-
-    const recognition = new SR();
-    recognition.lang = 'en-US';            // Use en-US for max browser compatibility
-    recognition.continuous = true;         // Continuous to prevent abrupt stops
-    recognition.interimResults = true;     // Live typing as user speaks
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      console.log('[STT] Recognition started');
-      setIsListening(true);
-      // Clear previous query when starting fresh voice input
-      queryRef.current = '';
-      setQuery('');
-    };
-
-    recognition.onaudiostart = () => {
-      console.log('[STT] Audio capture started — mic is working');
-    };
-
-    recognition.onspeechstart = () => {
-      console.log('[STT] Speech detected');
-    };
-
-    recognition.onresult = (event) => {
-      let finalText = '';
-      let interimText = '';
-      // Continuous mode appends to results, so we loop through all
-      for (let i = 0; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += t;
-        } else {
-          interimText += t;
-        }
-      }
-      // CRITICAL FIX: Concatenate final and interim (was using || before which hid interim text)
-      const displayText = finalText + interimText;
-      console.log('[STT] Result:', { finalText, interimText, displayText });
-      if (displayText) {
-        queryRef.current = displayText;
-        setQuery(displayText);
-      }
-    };
-
-    recognition.onend = () => {
-      console.log('[STT] Recognition ended. Final query:', queryRef.current);
-      setIsListening(false);
-      // Auto-submit whatever was captured
-      if (queryRef.current.trim()) {
-        toast.success('Voice captured! Submitting...', { duration: 2000 });
-        setTimeout(() => submitVoiceQuery.current(queryRef.current), 300);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error('[STT] Error:', event.error);
-      setIsListening(false);
-      if (event.error === 'no-speech') {
-        toast('No speech detected. Please try again.', { icon: '🎤', duration: 3000 });
-      } else if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied. Please allow mic in browser settings.');
-      } else if (event.error !== 'aborted') {
-        toast.error('Speech recognition error: ' + event.error);
-      }
-    };
-
-    return recognition;
-  };
-
-  const toggleMic = () => {
+  // ── Robust STT (MediaRecorder + Backend Gemini Transcription) ─────────────
+  const toggleMic = async () => {
     if (isListening) {
-      // Stop listening
-      if (recognitionRef.current) {
+      if (recognitionRef.current && recognitionRef.current.state === 'recording') {
         recognitionRef.current.stop();
       }
-    } else {
-      // Start listening
-      const recognition = initRecognition();
-      if (!recognition) {
-        toast.error('Speech recognition not supported in this browser. Use Chrome.');
-        return;
-      }
-      recognitionRef.current = recognition;
-      try {
-        recognition.start();
-        toast('🎤 Speak now...', { duration: 3000 });
-      } catch (err) {
-        console.error('[STT] Start failed:', err);
-        toast.error('Could not start speech recognition: ' + err.message);
-      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      recognitionRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstart = () => {
+        setIsListening(true);
+        queryRef.current = '';
+        setQuery('');
+        toast('🎙️ Recording... Speak now', { icon: '🎤', duration: 3000 });
+      };
+
+      mediaRecorder.onstop = async () => {
+        setIsListening(false);
+        stream.getTracks().forEach(track => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+        if (audioBlob.size < 1000) {
+          toast.error('Audio too short or empty');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'speech.webm');
+        const toastId = toast.loading('Transcribing...');
+
+        try {
+          const res = await api.post('/admin/transcribe', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 20000
+          });
+          toast.dismiss(toastId);
+
+          if (res.data?.text && res.data.text.trim()) {
+            const t = res.data.text.trim();
+            setQuery(t);
+            queryRef.current = t;
+            toast.success('Voice captured!');
+            // Auto submit
+            setTimeout(() => submitVoiceQuery.current(t), 300);
+          } else {
+            toast.error('Speech not recognized. Please try again.');
+          }
+        } catch (err) {
+          toast.dismiss(toastId);
+          console.error('[Transcribe Error]', err);
+          toast.error('Transcription failed: ' + (err.response?.data?.error || err.message));
+        }
+      };
+
+      mediaRecorder.start();
+    } catch (err) {
+      console.error('[Mic Error]', err);
+      toast.error('Microphone access denied or not available.');
     }
   };
 

@@ -5,7 +5,7 @@ import Insight from '../models/Insight.js';
 import Alert from '../models/Alert.js';
 import AdminLog from '../models/AdminLog.js';
 import UploadLog from '../models/UploadLog.js';
-import { callGeminiJSON } from '../services/geminiService.js';
+import { callGeminiJSON, getModel } from '../services/geminiService.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 // import nodemailer from 'nodemailer';
@@ -982,5 +982,37 @@ export const getVoiceStatus = async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+};
+
+// POST /api/admin/transcribe (Audio -> Text using Gemini)
+export const transcribeAudio = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
+    
+    const audioBase64 = req.file.buffer.toString('base64');
+    let mimeType = req.file.mimetype;
+    
+    // Fallback if browser sends generic mimetype
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = 'audio/webm'; 
+    }
+
+    const model = await getModel();
+    const result = await model.generateContent([
+      "You are a highly precise dictation assistant. Transcribe the following audio accurately. Output ONLY the raw transcript text. Do not add quotes, introductory text, or descriptions. If there is no speech, output nothing.",
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data: audioBase64
+        }
+      }
+    ]);
+    
+    let text = result?.response?.text?.() || '';
+    res.json({ text: text.trim() });
+  } catch (err) {
+    console.error('[TranscribeAudio]', err);
+    res.status(500).json({ error: 'Audio transcription failed: ' + err.message });
   }
 };

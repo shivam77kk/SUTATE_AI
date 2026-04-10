@@ -2,8 +2,14 @@ import express from 'express';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { geminiLimiter } from '../middleware/rateLimiter.js';
 import * as ac from '../controllers/adminController.js';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
+
 router.use(authenticate, requireRole('admin'));
+router.post('/transcribe', upload.single('audio'), ac.transcribeAudio);
+
 router.get('/overview', ac.getOverview);
 router.get('/naac-export', ac.exportNaac);
 router.get('/top-atrisk', ac.getTopAtRisk);
