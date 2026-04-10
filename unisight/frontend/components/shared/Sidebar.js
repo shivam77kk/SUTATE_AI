@@ -23,6 +23,7 @@ const NAV_ITEMS = {
   faculty: [
     { href: '/faculty/dashboard',             icon: '🏠', label: 'Dashboard' },
     { href: '/faculty/upload',                icon: '📤', label: 'Upload CSV' },
+    { href: '/faculty/sheets',                icon: '🔗', label: 'Google Sheets' },
     { href: '/faculty/classes',               icon: '🏫', label: 'My Classes' },
     { href: '/faculty/effectiveness',         icon: '🎖️', label: 'Effectiveness' },
     { href: '/faculty/polls',                 icon: '📊', label: 'Polls' },

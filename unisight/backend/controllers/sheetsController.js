@@ -86,6 +86,6 @@ export async function syncSheetForFaculty(config, facultyId) {
     await SheetsConfig.findOneAndUpdate({ facultyId }, { lastSyncStatus: 'failed', lastSyncError: err.message });
   });
 
-  await SheetsConfig.findOneAndUpdate({ facultyId }, { lastSyncedAt: new Date(), lastSyncStatus: 'success' });
+  await SheetsConfig.findOneAndUpdate({ facultyId }, { lastSyncStatus: 'processing' });
   return { uploadId, message: `Sync started. ${rows.length} rows found.`, rowCount: rows.length };
 }
