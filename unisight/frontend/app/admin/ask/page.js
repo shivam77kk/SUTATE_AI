@@ -185,74 +185,93 @@ export default function AskPage() {
     mutation.mutate(text);
   };
 
-  // ── Robust STT (MediaRecorder + Backend Gemini Transcription) ─────────────
-  const toggleMic = async () => {
+  // ── STT (Web Speech API) ─ Fully fixed for live typing and auto-send ────────
+  const initRecognition = () => {
+    if (typeof window === 'undefined') return null;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+
+    const recognition = new SR();
+    // Using en-US allows Google's most advanced speech models to load faster
+    recognition.lang = 'en-US';
+    // continuous: false means it waits for you to finish your sentence/pause, 
+    // and then automatically triggers onend to submit!
+    recognition.continuous = false;        
+    recognition.interimResults = true;     // Enables live typing
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log('[STT] Recognition started');
+      setIsListening(true);
+      queryRef.current = '';
+      setQuery('');
+    };
+
+    recognition.onresult = (event) => {
+      let finalText = '';
+      let interimText = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += t;
+        } else {
+          interimText += t;
+        }
+      }
+      // Properly join final sentences with the currently spoken words
+      const displayText = finalText + interimText;
+      console.log('[STT] Result:', { finalText, interimText, displayText });
+      if (displayText) {
+        queryRef.current = displayText;
+        setQuery(displayText);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log('[STT] Recognition ended. Final query:', queryRef.current);
+      setIsListening(false);
+      // Auto-submit automatically when the mic detects silence
+      if (queryRef.current.trim()) {
+        toast.success('Voice captured! Submitting...', { duration: 2000 });
+        setTimeout(() => submitVoiceQuery.current(queryRef.current), 300);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('[STT] Error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        toast('No speech detected. Please speak closer to the microphone.', { icon: '🎤', duration: 3000 });
+      } else if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please allow mic in browser settings.');
+      } else if (event.error !== 'aborted') {
+        toast.error('Speech recognition error: ' + event.error);
+      }
+    };
+
+    return recognition;
+  };
+
+  const toggleMic = () => {
     if (isListening) {
-      if (recognitionRef.current && recognitionRef.current.state === 'recording') {
+      // Force manually stop if clicked again
+      if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      recognitionRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstart = () => {
-        setIsListening(true);
-        queryRef.current = '';
-        setQuery('');
-        toast('🎙️ Recording... Speak now', { icon: '🎤', duration: 3000 });
-      };
-
-      mediaRecorder.onstop = async () => {
-        setIsListening(false);
-        stream.getTracks().forEach(track => track.stop());
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
-        if (audioBlob.size < 1000) {
-          toast.error('Audio too short or empty');
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'speech.webm');
-        const toastId = toast.loading('Transcribing...');
-
-        try {
-          const res = await api.post('/admin/transcribe', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 20000
-          });
-          toast.dismiss(toastId);
-
-          if (res.data?.text && res.data.text.trim()) {
-            const t = res.data.text.trim();
-            setQuery(t);
-            queryRef.current = t;
-            toast.success('Voice captured!');
-            // Auto submit
-            setTimeout(() => submitVoiceQuery.current(t), 300);
-          } else {
-            toast.error('Speech not recognized. Please try again.');
-          }
-        } catch (err) {
-          toast.dismiss(toastId);
-          console.error('[Transcribe Error]', err);
-          toast.error('Transcription failed: ' + (err.response?.data?.error || err.message));
-        }
-      };
-
-      mediaRecorder.start();
-    } catch (err) {
-      console.error('[Mic Error]', err);
-      toast.error('Microphone access denied or not available.');
+    } else {
+      const recognition = initRecognition();
+      if (!recognition) {
+        toast.error('Speech recognition not supported in this browser. Use Chrome.');
+        return;
+      }
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+        toast('🎤 Speak your question now...', { duration: 3000 });
+      } catch (err) {
+        console.error('[STT] Start failed:', err);
+        toast.error('Could not start speech recognition.');
+      }
     }
   };
 
