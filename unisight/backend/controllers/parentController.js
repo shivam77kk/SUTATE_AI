@@ -1,0 +1,38 @@
+import ParentContact from '../models/ParentContact.js';
+import User from '../models/User.js';
+
+export const getParentContact = async (req, res) => {
+  try {
+    const contact = await ParentContact.findOne({ studentId: req.user.studentId });
+    res.json({ contact });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const addParentContact = async (req, res) => {
+  try {
+    const { parentName, parentEmail } = req.body;
+    
+    const contact = await ParentContact.findOneAndUpdate(
+      { studentId: req.user.studentId },
+      { studentId: req.user.studentId, studentUserId: req.user.userId, parentName, parentEmail, isActive: true },
+      { upsert: true, new: true }
+    );
+    res.json({ message: 'Parent contact added. Confirmation email simulated.', contact });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const removeParentContact = async (req, res) => {
+  try {
+    await ParentContact.findOneAndUpdate(
+      { studentId: req.user.studentId },
+      { isActive: false }
+    );
+    res.json({ message: 'Parent notifications disabled' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};

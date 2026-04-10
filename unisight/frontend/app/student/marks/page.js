@@ -1,0 +1,129 @@
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/axios';
+
+export default function StudentMarks() {
+  const { data: marksData, isLoading } = useQuery({
+    queryKey: ['student-marks-trend'],
+    queryFn: () => api.get('/student/marks-trend').then(r => r.data),
+  });
+
+  const { data: insightData } = useQuery({
+    queryKey: ['student-insights'],
+    queryFn: () => api.get('/student/insights').then(r => r.data),
+  });
+
+  const subjects = marksData?.subjects || [];
+  const data = marksData?.data || [];
+  const recs = insightData?.recommendations || [];
+
+  // Build subject-level summary
+  const scoreKeys = ['ut1', 'midSem', 'ut2', 'endSem'];
+  const examLabels = ['UT1', 'MidSem', 'UT2', 'EndSem'];
+  const maxMap = { ut1: 30, midSem: 30, ut2: 30, endSem: 70 };
+
+  const subjectSummary = subjects.map(sub => {
+    const row = { subject: sub };
+    let total = 0;
+    data.forEach((examRow) => {
+      const key = examRow.exam?.toLowerCase().replace('sem', 'Sem') || '';
+      row[examRow.exam] = examRow[sub] || 0;
+      total += examRow[sub] || 0;
+    });
+    row.total = total;
+    row.max = 160;
+    row.percentage = Math.round((total / 160) * 100);
+    row.status = row.percentage >= 50 ? 'pass' : 'fail';
+    return row;
+  });
+
+  if (isLoading) return (
+    <div className="dashboard-content">
+      {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: '100px', marginBottom: '16px', borderRadius: '12px' }} />)}
+    </div>
+  );
+
+  return (
+    <div className="dashboard-content">
+      <div className="page-header animate-fadeIn">
+        <h1 className="page-title">📝 My <span className="gradient-text">Marks</span></h1>
+        <p className="page-subtitle">Detailed examination scores across all subjects</p>
+      </div>
+
+      {subjects.length === 0 ? (
+        <div className="empty-state">
+          <div style={{ fontSize: '48px' }}>📚</div>
+          <div style={{ fontSize: '18px', fontWeight: '600' }}>No marks yet</div>
+          <div>Your faculty hasn't uploaded marks for your class yet.</div>
+        </div>
+      ) : (
+        <>
+          {/* Subject Cards */}
+          <div className="grid-3" style={{ marginBottom: '24px' }}>
+            {subjectSummary.map((sub, i) => (
+              <div key={sub.subject} className="chart-container animate-slideUp" style={{ animationDelay: `${i * 0.07}s` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div style={{ fontWeight: '700', color: '#f1f5f9', fontSize: '15px' }}>{sub.subject}</div>
+                  <span className={`tag ${sub.status === 'pass' ? 'tag-safe' : 'tag-danger'}`}>
+                    {sub.status === 'pass' ? 'PASS' : 'FAIL'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '800', color: sub.status === 'pass' ? '#34d399' : '#fb7185', marginBottom: '4px' }}>
+                  {sub.total}/{sub.max}
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>{sub.percentage}% — Total Score</div>
+                <div className="progress-bar-container">
+                  <div className="progress-bar" style={{ width: `${sub.percentage}%`, background: sub.status === 'pass' ? '#10b981' : '#f43f5e' }} />
+                </div>
+
+                <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                  {examLabels.map(exam => (
+                    <div key={exam} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '8px', padding: '8px 10px' }}>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{exam}</div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#94a3b8' }}>{sub[exam] ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Full Table */}
+          <div className="chart-container animate-slideUp">
+            <div className="chart-title">📊 Score Breakdown Table</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    {examLabels.map(l => <th key={l}>{l}</th>)}
+                    <th>Total</th>
+                    <th>%</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subjectSummary.map(sub => (
+                    <tr key={sub.subject}>
+                      <td style={{ fontWeight: '600', color: '#f1f5f9' }}>{sub.subject}</td>
+                      {examLabels.map(exam => (
+                        <td key={exam}>{sub[exam] ?? '—'}</td>
+                      ))}
+                      <td style={{ fontWeight: '700' }}>{sub.total}/{sub.max}</td>
+                      <td style={{ fontWeight: '700' }}>{sub.percentage}%</td>
+                      <td>
+                        <span className={`tag ${sub.status === 'pass' ? 'tag-safe' : 'tag-danger'}`}>
+                          {sub.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

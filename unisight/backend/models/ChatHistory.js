@@ -1,0 +1,10 @@
+import mongoose from 'mongoose';
+const chatHistorySchema = new mongoose.Schema({
+  studentId: { type: String, required: true, unique: true },
+  messages: [{
+    role:      { type: String, enum: ['user', 'model'] },
+    content:   { type: String },
+    timestamp: { type: Date, default: Date.now },
+  }],
+}, { timestamps: true });
+export default mongoose.model('ChatHistory', chatHistorySchema);

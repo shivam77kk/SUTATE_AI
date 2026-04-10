@@ -1,0 +1,17 @@
+import AdminLog from '../models/AdminLog.js';
+
+// GET /api/admin/logs
+export const getAdminLogs = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 20;
+    const skip = (page - 1) * limit;
+    const [logs, total] = await Promise.all([
+      AdminLog.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      AdminLog.countDocuments(),
+    ]);
+    res.json({ logs, totalPages: Math.ceil(total / limit), page });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};

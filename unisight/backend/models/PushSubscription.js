@@ -1,0 +1,17 @@
+import mongoose from 'mongoose';
+
+const pushSubscriptionSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  subscription: {
+    endpoint: { type: String, required: true },
+    keys: {
+      p256dh: String,
+      auth: String,
+    },
+  },
+  updatedAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+pushSubscriptionSchema.index({ 'subscription.endpoint': 1 }, { unique: true });
+
+export default mongoose.model('PushSubscription', pushSubscriptionSchema);

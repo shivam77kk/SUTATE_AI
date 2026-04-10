@@ -1,0 +1,83 @@
+'use client';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import api from '@/lib/axios';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { CardSkel, TableSkel } from '@/components/ui/Skeleton';
+import toast from 'react-hot-toast';
+
+export default function CurriculumPage() {
+  const [running, setRunning] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['curriculum-analysis'],
+    queryFn: () => api.get('/admin/curriculum').then(r => r.data),
+  });
+
+  const run = async () => {
+    setRunning(true);
+    try {
+      await api.post('/admin/curriculum/analyse');
+      await refetch();
+      toast.success('Curriculum analysis complete ✓');
+    } catch { toast.error('Analysis failed'); }
+    finally { setRunning(false); }
+  };
+
+  if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;
+
+  const analysis = data?.analysis || {};
+  const flags = data?.flags || [];
+  const summary = data?.summary;
+
+  const SEV_COLS = { high: '#f43f5e', medium: '#f59e0b', low: '#10b981' };
+
+  return (
+    <div className="dashboard-content">
+      <PageHeader title="📚 Curriculum Analysis" subtitle="AI-powered curriculum effectiveness review"
+        action={<button onClick={run} disabled={running} style={{ padding: '10px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, minHeight: 44 }}>
+          {running ? <><span className="spinner" />Running...</> : '🔍 Run Analysis'}
+        </button>} />
+
+      {summary && (
+        <div className="chart-container" style={{ marginBottom: 20, borderLeft: '3px solid #6366f1' }}>
+          <div className="chart-title">🤖 AI Summary</div>
+          <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, fontStyle: 'italic' }}>{summary}</p>
+        </div>
+      )}
+
+      <div className="grid-3" style={{ marginBottom: 24 }}>
+        {[
+          { label: 'High severity', value: flags.filter(f => f.severity === 'high').length, color: '#f43f5e' },
+          { label: 'Medium severity', value: flags.filter(f => f.severity === 'medium').length, color: '#f59e0b' },
+          { label: 'Low severity', value: flags.filter(f => f.severity === 'low').length, color: '#10b981' },
+        ].map(item => (
+          <div key={item.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '20px 24px' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: item.color, fontFamily: "'Space Grotesk',sans-serif" }}>{item.value}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600 }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="chart-container">
+        <div className="chart-title">🚩 Curriculum Flags</div>
+        {flags.length === 0 ? (
+          <div className="empty-state"><span style={{ fontSize: 28 }}>✅</span><p>No curriculum issues flagged</p></div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {flags.map((f, i) => (
+              <div key={i} style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, borderLeft: `3px solid ${SEV_COLS[f.severity] || '#64748b'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <p style={{ fontWeight: 600, fontSize: 14, color: '#f1f5f9' }}>{f.subject}</p>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: SEV_COLS[f.severity], textTransform: 'uppercase', padding: '2px 8px', borderRadius: 999, background: `${SEV_COLS[f.severity]}18` }}>{f.severity}</span>
+                </div>
+                <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: f.recommendation ? 8 : 0 }}>{f.issue}</p>
+                {f.recommendation && <p style={{ fontSize: 12, color: '#818cf8', fontStyle: 'italic' }}>💡 {f.recommendation}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

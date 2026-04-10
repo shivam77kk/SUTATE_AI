@@ -1,0 +1,127 @@
+import React, { useState, useEffect } from 'react';
+import { Mail, CheckCircle2, ShieldAlert } from 'lucide-react';
+import api from '../../lib/axios';
+
+export default function ParentContactCard() {
+  const [contact, setContact] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  const [formData, setFormData] = useState({ parentName: '', parentEmail: '' });
+
+  useEffect(() => {
+    fetchContact();
+  }, []);
+
+  const fetchContact = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/parent');
+      setContact(res.data.contact);
+      if (res.data.contact?.isActive) {
+        setFormData({ parentName: res.data.contact.parentName, parentEmail: res.data.contact.parentEmail });
+      } else {
+        setIsEditing(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsEditing(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await api.post('/parent', formData);
+      setIsEditing(false);
+      fetchContact();
+      alert('Parent contact updated and enabled.');
+    } catch (err) {
+      alert('Failed to save parent contact');
+    }
+  };
+
+  const handleDisable = async () => {
+    if (!confirm('Are you sure you want to disable parent notifications?')) return;
+    try {
+      await api.delete('/parent');
+      fetchContact();
+    } catch (err) {
+      alert('Failed to disable');
+    }
+  };
+
+  if (loading) return <div className="animate-pulse bg-gray-100 h-48 rounded-xl"></div>;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-indigo-50 px-5 py-4 border-b border-indigo-100 flex items-center justify-between">
+        <h3 className="font-bold text-indigo-900 flex items-center gap-2">
+          <ShieldAlert size={18} className="text-indigo-600" />
+          Guardian Action Alerts (Opt-in)
+        </h3>
+        {contact?.isActive && !isEditing && (
+          <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1">
+            <CheckCircle2 size={12} /> Active
+          </span>
+        )}
+      </div>
+
+      <div className="p-5">
+        <p className="text-sm text-gray-500 mb-5">
+          If you opt-in, UniSight will automatically send educational alerts to your guardian ONLY if your dropout probability reaches <strong className="text-red-500">CRITICAL</strong> levels.
+        </p>
+
+        {isEditing ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Guardian Name</label>
+              <input 
+                type="text" value={formData.parentName} onChange={e => setFormData({...formData, parentName: e.target.value})}
+                className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="E.g. Jane Doe"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Guardian Email</label>
+              <input 
+                type="email" value={formData.parentEmail} onChange={e => setFormData({...formData, parentEmail: e.target.value})}
+                className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="E.g. parent@example.com"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleSave} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition text-sm">
+                Enable Alerts
+              </button>
+              {contact?.parentName && (
+                <button onClick={() => setIsEditing(false)} className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 rounded-lg transition text-sm">
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-center gap-3 mb-4">
+              <div className="bg-indigo-100 text-indigo-600 p-2 rounded-full"><Mail size={20} /></div>
+              <div>
+                <p className="font-bold text-gray-800 text-sm">{contact?.parentName}</p>
+                <p className="text-xs text-gray-500">{contact?.parentEmail}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setIsEditing(true)} className="flex-1 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold py-2 rounded-lg transition text-sm">
+                Edit Details
+              </button>
+              <button onClick={handleDisable} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-bold py-2 rounded-lg transition text-sm">
+                Disable Alerts
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

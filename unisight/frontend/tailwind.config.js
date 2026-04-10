@@ -1,0 +1,98 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './app/**/*.{js,jsx}',
+    './components/**/*.{js,jsx}',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Space Grotesk', 'sans-serif'],
+      },
+      colors: {
+        'base': '#05050f',
+        'elevated': '#0a0a1a',
+        'card': '#0d0d1f',
+        'card-2': '#111126',
+        'indigo': {
+          DEFAULT: '#6366f1',
+          mid: '#7c3aed',
+          light: '#818cf8',
+          pale: 'rgba(99,102,241,0.15)',
+          glow: 'rgba(99,102,241,0.3)',
+        },
+        'emerald': {
+          DEFAULT: '#10b981',
+          light: '#34d399',
+          pale: 'rgba(16,185,129,0.12)',
+          glow: 'rgba(16,185,129,0.3)',
+        },
+        'amber': {
+          DEFAULT: '#f59e0b',
+          light: '#fbbf24',
+          pale: 'rgba(245,158,11,0.12)',
+          glow: 'rgba(245,158,11,0.3)',
+        },
+        'rose': {
+          DEFAULT: '#f43f5e',
+          light: '#fb7185',
+          pale: 'rgba(244,63,94,0.12)',
+          glow: 'rgba(244,63,94,0.3)',
+        },
+        'sky': {
+          DEFAULT: '#0ea5e9',
+          light: '#38bdf8',
+          pale: 'rgba(14,165,233,0.12)',
+        },
+        'violet': {
+          DEFAULT: '#8b5cf6',
+          light: '#a78bfa',
+          pale: 'rgba(139,92,246,0.12)',
+        },
+        'text': {
+          primary: '#f1f5f9',
+          secondary: '#94a3b8',
+          muted: '#64748b',
+          faint: '#334155',
+        },
+      },
+      boxShadow: {
+        'glow-indigo': '0 0 20px rgba(99,102,241,0.3), 0 0 40px rgba(99,102,241,0.15)',
+        'glow-emerald': '0 0 20px rgba(16,185,129,0.3), 0 0 40px rgba(16,185,129,0.15)',
+        'glow-amber': '0 0 20px rgba(245,158,11,0.3), 0 0 40px rgba(245,158,11,0.15)',
+        'glow-rose': '0 0 20px rgba(244,63,94,0.3), 0 0 40px rgba(244,63,94,0.15)',
+        'card': '0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
+        'card-hover': '0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.12)',
+      },
+      animation: {
+        'float': 'float 6s ease-in-out infinite',
+        'glow-pulse': 'glow-pulse 2.5s ease-in-out infinite',
+        'gradient-shift': 'gradient-shift 8s ease infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(99,102,241,0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(99,102,241,0.5), 0 0 80px rgba(99,102,241,0.2)' },
+        },
+        'gradient-shift': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% center' },
+          '100%': { backgroundPosition: '200% center' },
+        },
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
+  },
+  plugins: [],
+};

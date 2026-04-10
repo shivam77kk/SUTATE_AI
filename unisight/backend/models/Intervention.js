@@ -1,0 +1,14 @@
+import mongoose from 'mongoose';
+const interventionSchema = new mongoose.Schema({
+  studentId:      { type: String, required: true },
+  facultyId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  alertId:        { type: mongoose.Schema.Types.ObjectId, ref: 'Alert', required: true },
+  classId:        { type: String, required: true },
+  riskAtSend:     { type: String, enum: ['HIGH', 'MEDIUM'], required: true },
+  sentAt:         { type: Date, default: Date.now },
+  acknowledgedAt: { type: Date, default: null },
+  resolvedAt:     { type: Date, default: null },
+  riskAfter:      { type: String, enum: ['HIGH', 'MEDIUM', 'LOW', null], default: null },
+  outcome:        { type: String, enum: ['improved', 'unchanged', 'worsened', 'pending'], default: 'pending' },
+}, { timestamps: true });
+export default mongoose.model('Intervention', interventionSchema);

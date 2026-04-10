@@ -1,0 +1,104 @@
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/axios';
+import { Users, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+
+export default function RegistrationHealthCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['registration-health'],
+    queryFn: () => api.get('/admin/registration-health').then(r => r.data),
+    refetchInterval: 30000 // refresh every 30s
+  });
+
+  if (isLoading) return <div className="skeleton" style={{ height: '300px', borderRadius: '16px' }} />;
+
+  const {
+    totalStudents,
+    studentsWithData,
+    studentsWithNoData,
+    facultyWhoNeverUploaded,
+    lastUploadByDept
+  } = data || {};
+
+  const healthScore = totalStudents > 0 
+    ? Math.round((studentsWithData / totalStudents) * 100) 
+    : 100;
+
+  const getStatusColor = (score) => {
+    if (score > 90) return '#10b981';
+    if (score > 70) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  return (
+    <div className="chart-container animate-slideUp">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+        <div>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Users size={18} className="text-primary" />
+            Registration Health
+          </h3>
+          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Sync status between user accounts and uploaded data</p>
+        </div>
+        <div style={{ 
+          background: `${getStatusColor(healthScore)}15`, 
+          color: getStatusColor(healthScore),
+          padding: '4px 12px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: '700',
+          border: `1px solid ${getStatusColor(healthScore)}40`
+        }}>
+          {healthScore}% Healthy
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Unmapped Students</p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontSize: '24px', fontWeight: '700', color: studentsWithNoData > 0 ? '#ef4444' : '#f1f5f9' }}>
+              {studentsWithNoData}
+            </span>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>/ {totalStudents}</span>
+          </div>
+          <p style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Registered but zero data found</p>
+        </div>
+
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Silent Faculty</p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontSize: '24px', fontWeight: '700', color: facultyWhoNeverUploaded?.length > 0 ? '#f59e0b' : '#f1f5f9' }}>
+              {facultyWhoNeverUploaded?.length}
+            </span>
+          </div>
+          <p style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Faculty with zero uploads</p>
+        </div>
+      </div>
+
+      <div>
+        <h4 style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '12px' }}>Department Activity</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {['CSE', 'IT', 'Mech', 'Civil'].map(dept => (
+            <div key={dept} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: '500' }}>{dept}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: lastUploadByDept[dept] ? '#10b981' : '#64748b' }}>
+                <Clock size={12} />
+                {lastUploadByDept[dept] ? `Last: ${new Date(lastUploadByDept[dept]).toLocaleDateString()}` : 'No activity'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {studentsWithNoData > 0 && (
+        <div style={{ marginTop: '20px', padding: '12px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: '8px', display: 'flex', gap: '10px' }}>
+          <AlertTriangle size={16} className="text-error" style={{ flexShrink: 0 }} />
+          <p style={{ fontSize: '11px', color: '#ef4444', margin: 0 }}>
+            {studentsWithNoData} students will see "No Data" screens because their Roll Numbers haven't been included in any CSV uploads yet.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,20 @@
+import mongoose from 'mongoose';
+
+const curriculumFlagSchema = new mongoose.Schema({
+  subject:          { type: String, required: true },
+  department:       { type: String, required: true },
+
+  avgFailureRate:   { type: Number },
+  semestersFlagged: { type: Number },
+  totalStudents:    { type: Number },
+  totalFailed:      { type: Number },
+  avgDifficultyRating: { type: Number, default: null },
+
+  flagSeverity:     { type: String, enum: ['watch', 'concern', 'critical'], default: 'watch' },
+  aiAnalysis:       { type: String },
+  recommendedActions: [{ type: String }],
+
+  lastUpdated: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+export default mongoose.model('CurriculumFlag', curriculumFlagSchema);

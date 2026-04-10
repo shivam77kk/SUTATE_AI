@@ -1,0 +1,76 @@
+import StudentGoal from '../models/StudentGoal.js';
+import Insight from '../models/Insight.js';
+import { callGemini } from '../services/geminiService.js';
+
+async function calculateGoalProjection(studentId, targetCgpa) {
+  const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
+  if (!insight) return { projectedCgpa: null, onTrack: false, requiredActions: null };
+
+  const currentCgpa = insight.cgpa || 0;
+  const gap = targetCgpa - currentCgpa;
+  const onTrack = gap <= 0.3;
+
+  let requiredActions = null;
+  try {
+    const prompt = `A university student has current CGPA ${currentCgpa} and target CGPA ${targetCgpa}. Their risk level is ${insight.riskLevel}.
+Write ONE specific improvement sentence (max 25 words) telling them exactly what to do. Return only the sentence.`;
+    requiredActions = (await callGemini(prompt)).trim();
+  } catch {
+    requiredActions = `Improve your weakest subjects and maintain attendance above 80% to reach CGPA ${targetCgpa}.`;
+  }
+
+  return { projectedCgpa: currentCgpa, onTrack, requiredActions };
+}
+
+// GET /api/goals
+export const getGoal = async (req, res) => {
+  try {
+    const goal = await StudentGoal.findOne({ studentId: req.user.studentId });
+    if (!goal) return res.json({ goal: null });
+
+    const insight = await Insight.findOne({ studentId: req.user.studentId }).sort({ createdAt: -1 });
+    res.json({
+      goal: {
+        ...goal.toObject(),
+        currentCgpa: insight?.cgpa || null,
+        gapToCgpa: goal.targetCgpa - (insight?.cgpa || 0),
+        onTrack: (goal.targetCgpa - (insight?.cgpa || 0)) <= 0.3,
+      }
+    });
+  } catch (err) {
+    console.error('[GetGoal]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// POST /api/goals
+export const setGoal = async (req, res) => {
+  try {
+    const { targetCgpa, semester, academicYear } = req.body;
+    if (!targetCgpa || targetCgpa < 0 || targetCgpa > 10)
+      return res.status(400).json({ error: 'Invalid target CGPA (0–10)' });
+
+    const projection = await calculateGoalProjection(req.user.studentId, targetCgpa);
+
+    const goal = await StudentGoal.findOneAndUpdate(
+      { studentId: req.user.studentId },
+      {
+        studentId: req.user.studentId,
+        targetCgpa,
+        semester: semester || 4,
+        academicYear: academicYear || '2024-25',
+        projectedCgpa: projection.projectedCgpa,
+        requiredActions: projection.requiredActions,
+        lastCalculatedAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ goal: { ...goal.toObject(), onTrack: projection.onTrack } });
+  } catch (err) {
+    console.error('[SetGoal]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export { calculateGoalProjection };

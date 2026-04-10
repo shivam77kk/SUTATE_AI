@@ -1,0 +1,1 @@
+self.addEventListener("push",i=>{const n=i.data.json(),t=n.title||"UniSight Notification",o={body:n.message,icon:"/icons/icon-192x192.png",badge:"/icons/icon-192x192.png",data:n.url||"/"};i.waitUntil(self.registration.showNotification(t,o))}),self.addEventListener("notificationclick",i=>{i.notification.close(),i.waitUntil(clients.openWindow(i.notification.data))});

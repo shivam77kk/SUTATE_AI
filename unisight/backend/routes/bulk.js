@@ -1,0 +1,9 @@
+import express from 'express';
+import multer from 'multer';
+import { authenticate, requireRole } from '../middleware/auth.js';
+import { bulkImportUsers, getBulkImportLogs } from '../controllers/bulkController.js';
+const upload = multer({ storage: multer.memoryStorage() });
+const router = express.Router();
+router.post('/users', authenticate, requireRole('admin'), upload.single('file'), bulkImportUsers);
+router.get('/logs', authenticate, requireRole('admin'), getBulkImportLogs);
+export default router;

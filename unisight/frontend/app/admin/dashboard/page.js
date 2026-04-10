@@ -1,0 +1,20 @@
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function AdminDashboardPage() {
+  const router = useRouter();
+  
+  useEffect(() => {
+    router.replace('/admin/overview');
+  }, [router]);
+  
+  return (
+    <div className="dashboard-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3, margin: '0 auto 16px' }} />
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Redirecting to overview...</p>
+      </div>
+    </div>
+  );
+}

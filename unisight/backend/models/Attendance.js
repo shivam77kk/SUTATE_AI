@@ -1,0 +1,12 @@
+import mongoose from 'mongoose';
+const attendanceSchema = new mongoose.Schema({
+  studentId:  { type: String, required: true },
+  classId:    { type: String, required: true },
+  subject:    { type: String, required: true },
+  department: { type: String, required: true },
+  semester:   { type: Number, required: true },
+  attended:   { type: Number, required: true },
+  total:      { type: Number, required: true },
+  percentage: { type: Number, required: true },
+}, { timestamps: true });
+export default mongoose.model('Attendance', attendanceSchema);

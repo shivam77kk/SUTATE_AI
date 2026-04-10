@@ -1,0 +1,30 @@
+'use client';
+import useAuthStore from '@/store/authStore';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+export function useAuth(requiredRole) {
+  const { user } = useAuthStore();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    if (user.isFirstLogin) {
+      router.replace('/change-password');
+      return;
+    }
+    if (requiredRole && user.role !== requiredRole) {
+      const dest = user.role === 'admin' ? '/admin/overview'
+        : user.role === 'faculty' ? '/faculty/dashboard'
+        : '/student/dashboard';
+      router.replace(dest);
+    }
+  }, [user, requiredRole]);
+
+  return { user, role: user?.role, isLoading: !user };
+}
+
+export default useAuth;

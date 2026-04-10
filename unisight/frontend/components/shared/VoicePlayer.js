@@ -1,0 +1,254 @@
+'use client';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
+
+export default function VoicePlayer({ audioData, text }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef(null);
+  const animationRef = useRef(null);
+
+  useEffect(() => {
+    if (!audioData) return;
+
+    const audio = new Audio(audioData);
+    audioRef.current = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      setDuration(audio.duration);
+    });
+
+    audio.addEventListener('ended', () => {
+      setIsPlaying(false);
+      setProgress(0);
+    });
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [audioData]);
+
+  useEffect(() => {
+    if (isPlaying && audioRef.current) {
+      const updateProgress = () => {
+        const current = audioRef.current.currentTime;
+        const total = audioRef.current.duration;
+        setProgress((current / total) * 100);
+        animationRef.current = requestAnimationFrame(updateProgress);
+      };
+      animationRef.current = requestAnimationFrame(updateProgress);
+    } else {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    }
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const toggleMute = () => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  };
+
+  const handleSeek = (e) => {
+    if (!audioRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = (x / rect.width) * 100;
+    const time = (percentage / 100) * audioRef.current.duration;
+    audioRef.current.currentTime = time;
+    setProgress(percentage);
+  };
+
+  if (!audioData) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        background: 'rgba(99,102,241,0.08)',
+        border: '1px solid rgba(99,102,241,0.2)',
+        borderRadius: 14,
+        padding: '14px 16px',
+        marginTop: 12,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+      }}
+    >
+      {/* Play/Pause Button */}
+      <button
+        onClick={togglePlay}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+          border: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,102,241,0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+      >
+        {isPlaying ? (
+          <Pause size={18} color="white" fill="white" />
+        ) : (
+          <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }} />
+        )}
+      </button>
+
+      {/* Waveform/Progress Bar */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div
+          onClick={handleSeek}
+          style={{
+            height: 32,
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 8,
+            position: 'relative',
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Progress Fill */}
+          <motion.div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${progress}%`,
+              background: 'linear-gradient(90deg, rgba(99,102,241,0.3), rgba(99,102,241,0.5))',
+              borderRadius: 8,
+            }}
+          />
+
+          {/* Animated Waveform Bars */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              padding: '0 4px',
+            }}
+          >
+            {[...Array(20)].map((_, i) => (
+              <motion.div
+                key={i}
+                animate={
+                  isPlaying
+                    ? {
+                        height: [
+                          `${20 + Math.random() * 60}%`,
+                          `${20 + Math.random() * 60}%`,
+                          `${20 + Math.random() * 60}%`,
+                        ],
+                      }
+                    : { height: '30%' }
+                }
+                transition={{
+                  duration: 0.5,
+                  repeat: isPlaying ? Infinity : 0,
+                  delay: i * 0.05,
+                }}
+                style={{
+                  width: 2,
+                  background: i * 5 < progress ? '#818cf8' : 'rgba(255,255,255,0.2)',
+                  borderRadius: 2,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Time Display */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: 10,
+            color: '#94a3b8',
+            fontFamily: 'monospace',
+          }}
+        >
+          <span>
+            {audioRef.current
+              ? `${Math.floor(audioRef.current.currentTime / 60)}:${String(
+                  Math.floor(audioRef.current.currentTime % 60)
+                ).padStart(2, '0')}`
+              : '0:00'}
+          </span>
+          <span>
+            {duration
+              ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(
+                  2,
+                  '0'
+                )}`
+              : '0:00'}
+          </span>
+        </div>
+      </div>
+
+      {/* Mute Button */}
+      <button
+        onClick={toggleMute}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+        }}
+      >
+        {isMuted ? <VolumeX size={16} color="#94a3b8" /> : <Volume2 size={16} color="#94a3b8" />}
+      </button>
+    </motion.div>
+  );
+}

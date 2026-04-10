@@ -1,0 +1,33 @@
+import mongoose from 'mongoose';
+const uploadLogSchema = new mongoose.Schema({
+  uploadId:         { type: String, required: true, unique: true },
+  facultyId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  classId:          { type: String, required: true },
+  department:       { type: String },
+  semester:         { type: Number },
+  originalFilename: { type: String },
+  studentCount:     { type: Number, default: 0 },
+  durationMs:       { type: Number, default: 0 },
+  pendingAlerts:    [{ type: String }],
+  status:           { 
+    type: String, 
+    enum: ['pending_validation', 'validated', 'failed_validation', 'processing', 'complete', 'error'], 
+    default: 'pending_validation' 
+  },
+  validationMetadata: {
+    mismatchCount: { type: Number, default: 0 },
+    mismatches: [{ 
+      row: { type: Number },
+      originalId: { type: String },
+      suggestions: [{ 
+        studentId: { type: String }, 
+        name: { type: String }, 
+        similarity: { type: Number } 
+      }]
+    }],
+    matchedCount: { type: Number, default: 0 }
+  },
+  tempData: { type: String }, // JSON string of valid rows stored after validation
+  errorMessage:     { type: String, default: null },
+}, { timestamps: true });
+export default mongoose.model('UploadLog', uploadLogSchema);

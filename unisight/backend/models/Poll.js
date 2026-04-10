@@ -1,0 +1,24 @@
+import mongoose from 'mongoose';
+
+const responseSchema = new mongoose.Schema({
+  studentId: { type: String, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  respondedAt: { type: Date, default: Date.now },
+});
+
+const pollSchema = new mongoose.Schema(
+  {
+    pollId: { type: String, required: true, unique: true },
+    code: { type: String, required: true, unique: true },
+    facultyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    classId: { type: String, required: true },
+    department: { type: String, required: true },
+    question: { type: String, required: true },
+    isActive: { type: Boolean, default: true },
+    closedAt: { type: Date },
+    responses: [responseSchema],
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model('Poll', pollSchema);

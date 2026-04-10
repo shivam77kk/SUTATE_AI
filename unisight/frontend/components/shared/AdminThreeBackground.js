@@ -1,0 +1,231 @@
+'use client';
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+
+export default function AdminThreeBackground() {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let renderer;
+    try {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, failIfMajorPerformanceCaveat: true });
+    
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    containerRef.current.appendChild(renderer.domElement);
+
+    // Create network nodes (representing data points)
+    const nodeGeometry = new THREE.SphereGeometry(0.04, 16, 16);
+    const nodeMaterial = new THREE.MeshBasicMaterial({
+      color: '#6366f1',
+      transparent: true,
+      opacity: 0.6,
+    });
+
+    const nodes = [];
+    const nodeCount = 50;
+
+    for (let i = 0; i < nodeCount; i++) {
+      const node = new THREE.Mesh(nodeGeometry.clone(), nodeMaterial.clone());
+      node.position.set(
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 12
+      );
+      node.userData = {
+        originalPos: node.position.clone(),
+        speed: Math.random() * 0.5 + 0.5,
+        offset: Math.random() * Math.PI * 2
+      };
+      nodes.push(node);
+      scene.add(node);
+    }
+
+    // Create connections between nodes
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: '#6366f1',
+      transparent: true,
+      opacity: 0.1,
+    });
+
+    const connections = [];
+    for (let i = 0; i < nodeCount; i++) {
+      for (let j = i + 1; j < nodeCount; j++) {
+        if (Math.random() > 0.88) {
+          const points = [nodes[i].position.clone(), nodes[j].position.clone()];
+          const geometry = new THREE.BufferGeometry().setFromPoints(points);
+          const line = new THREE.Line(geometry, lineMaterial.clone());
+          line.userData = { from: i, to: j };
+          connections.push(line);
+          scene.add(line);
+        }
+      }
+    }
+
+    // Add floating data cubes
+    const cubeGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const cubeMaterial = new THREE.MeshBasicMaterial({
+      color: '#f59e0b',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.25,
+    });
+
+    const cubes = [];
+    const cubeColors = ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6'];
+    for (let i = 0; i < 6; i++) {
+      const mat = cubeMaterial.clone();
+      mat.color.set(cubeColors[i % cubeColors.length]);
+      const cube = new THREE.Mesh(cubeGeometry, mat);
+      cube.position.set(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10
+      );
+      cube.userData = {
+        rotSpeed: {
+          x: (Math.random() - 0.5) * 0.01,
+          y: (Math.random() - 0.5) * 0.01,
+          z: (Math.random() - 0.5) * 0.01
+        },
+        floatSpeed: Math.random() * 0.4 + 0.3,
+        floatOffset: Math.random() * Math.PI * 2
+      };
+      cubes.push(cube);
+      scene.add(cube);
+    }
+
+    // Add glowing rings
+    const ringGeometry = new THREE.TorusGeometry(1, 0.02, 16, 100);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: '#6366f1',
+      transparent: true,
+      opacity: 0.15,
+    });
+    
+    const rings = [];
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial.clone());
+      ring.position.set(
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6
+      );
+      ring.rotation.x = Math.random() * Math.PI;
+      ring.rotation.y = Math.random() * Math.PI;
+      ring.userData = {
+        rotSpeed: (Math.random() - 0.5) * 0.005,
+        scale: Math.random() * 0.5 + 0.5
+      };
+      ring.scale.setScalar(ring.userData.scale);
+      rings.push(ring);
+      scene.add(ring);
+    }
+
+    camera.position.z = 6;
+
+    let mouseX = 0;
+    let mouseY = 0;
+    let targetX = 0;
+    let targetY = 0;
+
+    const handleMouseMove = (event) => {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+
+    const clock = new THREE.Clock();
+
+    const animate = () => {
+      const elapsedTime = clock.getElapsedTime();
+
+      // Animate nodes with wave motion
+      nodes.forEach((node, i) => {
+        const { originalPos, speed, offset } = node.userData;
+        node.position.x = originalPos.x + Math.sin(elapsedTime * speed + offset) * 0.3;
+        node.position.y = originalPos.y + Math.cos(elapsedTime * speed + offset) * 0.3;
+        node.position.z = originalPos.z + Math.sin(elapsedTime * speed * 0.5 + offset) * 0.2;
+      });
+
+      // Update connections to follow nodes
+      connections.forEach((line) => {
+        const fromNode = nodes[line.userData.from];
+        const toNode = nodes[line.userData.to];
+        const positions = line.geometry.attributes.position.array;
+        positions[0] = fromNode.position.x;
+        positions[1] = fromNode.position.y;
+        positions[2] = fromNode.position.z;
+        positions[3] = toNode.position.x;
+        positions[4] = toNode.position.y;
+        positions[5] = toNode.position.z;
+        line.geometry.attributes.position.needsUpdate = true;
+      });
+
+      // Animate cubes
+      cubes.forEach((cube) => {
+        cube.rotation.x += cube.userData.rotSpeed.x;
+        cube.rotation.y += cube.userData.rotSpeed.y;
+        cube.rotation.z += cube.userData.rotSpeed.z;
+        cube.position.y = Math.sin(elapsedTime * cube.userData.floatSpeed + cube.userData.floatOffset) * 0.4;
+      });
+
+      // Animate rings
+      rings.forEach((ring) => {
+        ring.rotation.z += ring.userData.rotSpeed;
+      });
+
+      // Smooth camera movement based on mouse
+      targetX += (mouseX * 0.3 - targetX) * 0.02;
+      targetY += (mouseY * 0.3 - targetY) * 0.02;
+      camera.position.x = targetX;
+      camera.position.y = targetY;
+      camera.lookAt(scene.position);
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('resize', handleResize);
+      if (containerRef.current && renderer && renderer.domElement) {
+        try { containerRef.current.removeChild(renderer.domElement); } catch (_) {}
+      }
+      renderer && renderer.dispose();
+    };
+    } catch (err) {
+      console.warn('[AdminThreeBackground] WebGL unavailable:', err.message);
+    }
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 0,
+        pointerEvents: 'none',
+        opacity: 0.35,
+      }}
+    />
+  );
+}

@@ -1,0 +1,13 @@
+import mongoose from 'mongoose';
+
+const parentContactSchema = new mongoose.Schema({
+  studentId:      { type: String, required: true, unique: true },
+  studentUserId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  parentName:     { type: String, required: true },
+  parentEmail:    { type: String, required: true },
+  isActive:       { type: Boolean, default: true },
+  lastDigestSent: { type: Date, default: null },
+  digestCount:    { type: Number, default: 0 },
+}, { timestamps: true });
+
+export default mongoose.model('ParentContact', parentContactSchema);

@@ -1,0 +1,63 @@
+'use client';
+import { motion } from 'framer-motion';
+
+export function Slider({ value, onChange, min = 0, max = 100, step = 1, label }) {
+  const pct = ((value - min) / (max - min)) * 100;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {label && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: '#94a3b8' }}>{label}</span>
+          <span style={{ 
+            fontSize: 13, fontWeight: 700, color: '#818cf8', fontFamily: 'monospace',
+            padding: '2px 8px', borderRadius: 6, 
+            background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)',
+          }}>{value}</span>
+        </div>
+      )}
+      <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
+        {/* Track */}
+        <div style={{ 
+          position: 'absolute', width: '100%', height: 6, 
+          background: 'rgba(255,255,255,0.06)', borderRadius: 999,
+          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        }} />
+        {/* Filled track */}
+        <motion.div 
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          style={{
+            position: 'absolute', height: 6,
+            background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            borderRadius: 999,
+            boxShadow: '0 0 8px rgba(99,102,241,0.3)',
+          }} 
+        />
+        {/* Thumb indicator */}
+        <motion.div 
+          animate={{ left: `${pct}%` }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          style={{
+            position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
+            width: 16, height: 16, borderRadius: '50%',
+            background: 'white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.5), 0 0 12px rgba(99,102,241,0.3)',
+            border: '2px solid #6366f1',
+            pointerEvents: 'none',
+          }}
+        />
+        <input
+          type="range"
+          min={min} max={max} step={step} value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{
+            position: 'absolute', width: '100%', opacity: 0, cursor: 'pointer', height: 24, margin: 0,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default Slider;

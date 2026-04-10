@@ -1,0 +1,105 @@
+import TeacherInsight from '../models/TeacherInsight.js';
+import Marks from '../models/Marks.js';
+import Insight from '../models/Insight.js';
+import { callGeminiJSON } from './geminiService.js';
+
+export async function runTeacherEffectivenessAgent({ facultyId, classId, department, semester, students }) {
+  const totalStudents = students.length;
+  const passingStudents = students.filter(s => s.avgScore >= 40).length;
+  const classPassRate = Math.round((passingStudents / totalStudents) * 100);
+  const classAvgScore = Math.round(students.reduce((sum, s) => sum + s.avgScore, 0) / totalStudents);
+  const atRiskCount = students.filter(s => ['HIGH','CRITICAL'].includes(s.dropoutTier)).length;
+
+  const allDeptInsights = await Insight.find({ department, semester }).select('cgpa dropoutTier');
+  const deptPassCount = allDeptInsights.filter(i => (i.cgpa || 0) >= 4).length;
+  const deptAvgPassRate = allDeptInsights.length
+    ? Math.round((deptPassCount / allDeptInsights.length) * 100) : 50;
+
+  const prevSemMarks = await Marks.find({ uploadedBy: facultyId, department, semester: semester - 1 });
+  const prevAvgScore = prevSemMarks.length
+    ? Math.round(prevSemMarks.reduce((s, m) => {
+        const total = Object.values(m.scores).reduce((a, v) => a + (v || 0), 0);
+        return s + total;
+      }, 0) / prevSemMarks.length) : null;
+
+  const passRateScore = Math.min(40, Math.round((classPassRate / 100) * 40));
+  const scoreScore = Math.min(30, Math.round((classAvgScore / 100) * 30));
+  const atRiskScore = Math.round(((totalStudents - atRiskCount) / totalStudents) * 30);
+  const effectivenessScore = passRateScore + scoreScore + atRiskScore;
+
+  const subjectSummary = {};
+  for (const s of students) {
+    for (const sub of s.subjects) {
+      if (!subjectSummary[sub.subject]) subjectSummary[sub.subject] = [];
+      subjectSummary[sub.subject].push(sub.totalScore);
+    }
+  }
+  const subjectAvgs = Object.entries(subjectSummary).map(([subj, scores]) => ({
+    subject: subj,
+    avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    failCount: scores.filter(score => score < 40).length,
+  }));
+
+  const weakestSubject = subjectAvgs.sort((a, b) => a.avg - b.avg)[0];
+
+  const prompt = `
+You are analysing teaching effectiveness data for a university faculty member.
+
+Class data:
+- Class pass rate: ${classPassRate}%
+- Department average pass rate: ${deptAvgPassRate}%
+- Class average score: ${classAvgScore}/160
+- At-risk students: ${atRiskCount}/${totalStudents}
+- Effectiveness score (0-100): ${effectivenessScore}
+- Subject performance: ${JSON.stringify(subjectAvgs)}
+- Previous semester average score: ${prevAvgScore || 'not available'}
+
+Return ONLY a JSON object with:
+{
+  "effectivenessSummary": "2 sentences about their teaching performance, comparing to department average. Be factual, not generic.",
+  "teachingRecommendations": [
+    { "title": "specific action", "description": "specific reason + what to do (20 words max)", "priority": "HIGH" },
+    { "title": "specific action", "description": "specific reason + what to do (20 words max)", "priority": "MEDIUM" },
+    { "title": "specific action", "description": "specific reason + what to do (20 words max)", "priority": "LOW" }
+  ]
+}
+
+RULES:
+1. Return ONLY the JSON object.
+2. NO comments (// or /*) inside JSON.
+3. NO trailing commas.
+
+Base recommendations on the actual data — mention specific subjects and numbers. Never be generic.
+`;
+
+  let aiOutput;
+  try {
+    aiOutput = await callGeminiJSON(prompt);
+  } catch (err) {
+    aiOutput = {
+      effectivenessSummary: `Your class pass rate is ${classPassRate}%, which is ${classPassRate > deptAvgPassRate ? 'above' : 'below'} the department average of ${deptAvgPassRate}%.`,
+      teachingRecommendations: [
+        { title: 'Address weakest subject', description: `${weakestSubject?.subject || 'One subject'} has the lowest average — consider a revision session.`, priority: 'HIGH' },
+        { title: 'Follow up on at-risk students', description: `${atRiskCount} students are at high risk — personal check-ins recommended.`, priority: 'MEDIUM' },
+        { title: 'Review participation scores', description: 'Low participation often precedes score drops — engage quieter students.', priority: 'LOW' },
+      ],
+    };
+  }
+
+  await TeacherInsight.findOneAndUpdate(
+    { facultyId, classId },
+    {
+      facultyId, classId, department, semester,
+      effectivenessScore,
+      classPassRate, deptAvgPassRate,
+      classAvgScore, deptAvgScore: classAvgScore,
+      atRiskResolutionRate: null,
+      effectivenessSummary: aiOutput.effectivenessSummary,
+      teachingRecommendations: aiOutput.teachingRecommendations,
+      prevSemesterAvgScore: prevAvgScore,
+      scoreChangeVsPrevSem: prevAvgScore ? classAvgScore - prevAvgScore : null,
+      generatedAt: new Date(),
+    },
+    { upsert: true, new: true }
+  );
+}

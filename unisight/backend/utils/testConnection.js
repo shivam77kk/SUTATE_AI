@@ -1,0 +1,24 @@
+import dns from 'dns';
+import mongoose from 'mongoose';
+import fs from 'fs';
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Force Google DNS to bypass ISP DNS that may block SRV record lookups
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+
+const uri = process.env.MONGODB_URI;
+console.log('MONGODB_URI:', uri?.substring(0, 50) + '...');
+
+mongoose.connect(uri, { serverSelectionTimeoutMS: 30000, connectTimeoutMS: 30000 })
+  .then(() => {
+    fs.writeFileSync('connection_result.txt', 'SUCCESS');
+    console.log('SUCCESS - Connected to Atlas');
+    process.exit(0);
+  })
+  .catch(e => {
+    const msg = e.message || String(e);
+    fs.writeFileSync('connection_result.txt', 'FAILED: ' + msg);
+    console.log('FAILED:', msg);
+    process.exit(1);
+  });
