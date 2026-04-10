@@ -318,22 +318,25 @@ export default function LoginPage() {
           <p style={{ fontSize: 11, marginBottom: 8, color: '#64748b', fontWeight: 600 }}>Demo Accounts (after running seed)</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, fontSize: 11 }}>
             {[
-              { email: 'shivam77@gmail.com', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
-              { email: 'prof.sharma@faculty.edu', color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
-              { email: 'riya.shah@student.edu', color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
+              { label: '🛡️ Admin', email: 'shivam77@gmail.com', pw: '9082249120', role: 'admin', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+              { label: '👨‍🏫 Faculty', email: 'prof.sharma@faculty.edu', pw: 'faculty123', role: 'faculty', color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
+              { label: '🎓 Student', email: 'riya.shah@student.edu', pw: 'student123', role: 'student', color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
             ].map(d => (
-              <span 
-                key={d.email} 
-                onClick={() => setEmail(d.email)}
-                style={{ 
-                  padding: '4px 10px', borderRadius: 8, background: d.bg, color: d.color, fontWeight: 600,
-                  border: `1px solid ${d.color}20`,
-                  cursor: 'pointer',
+              <span
+                key={d.email}
+                onClick={() => { setEmail(d.email); setPassword(d.pw); setRole(d.role); setError(''); }}
+                title={`Click to fill: ${d.email} / ${d.pw}`}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, background: d.bg, color: d.color, fontWeight: 600,
+                  border: `1px solid ${d.color}30`,
+                  cursor: 'pointer', transition: 'opacity 0.2s',
                 }}
-              >{d.email}</span>
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >{d.label}</span>
             ))}
           </div>
-          <p style={{ fontSize: 11, marginTop: 8, color: '#334155' }}>Admin: 9082249120 · Others: student123 / faculty123</p>
+          <p style={{ fontSize: 11, marginTop: 8, color: '#475569' }}>Click a role to auto-fill · Admin: 9082249120 · Faculty/Student: 123 suffix</p>
         </motion.div>
       </motion.div>
     </div>

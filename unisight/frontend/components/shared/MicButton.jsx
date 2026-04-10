@@ -3,53 +3,69 @@ import { Mic, MicOff } from 'lucide-react';
 
 /**
  * Reusable Mic Button with pulsing animation when active.
+ * Uses inline styles (no Tailwind dependency).
  */
 export default function MicButton({
-  isListening, 
-  onClick, 
+  isListening,
+  onClick,
   disabled = false,
-  size = 'md', 
+  size = 'md',
   theme = 'purple'
 }) {
-  const sizes = { 
-    sm: 'w-8 h-8', 
-    md: 'w-12 h-12', 
-    lg: 'w-16 h-16' 
-  };
-  const iconSizes = { 
-    sm: 14, 
-    md: 18, 
-    lg: 24 
-  };
+  const sizeMap = { sm: 32, md: 48, lg: 64 };
+  const iconMap = { sm: 14, md: 20, lg: 26 };
+  const dim = sizeMap[size] || 48;
+  const iconSize = iconMap[size] || 20;
 
-  const themeColors = {
-    purple: isListening ? 'bg-red-500 border-red-400' : 'border-purple-500 hover:bg-purple-500/20',
-    teal:   isListening ? 'bg-red-500 border-red-400' : 'border-emerald-500 hover:bg-emerald-500/20',
-    amber:  isListening ? 'bg-red-500 border-red-400' : 'border-amber-500 hover:bg-amber-500/20',
+  const accentMap = {
+    purple: '#a78bfa',
+    teal: '#6ee7b7',
+    amber: '#fbbf24',
   };
-
-  const textColor = theme === 'purple' ? 'text-purple-400' : theme === 'teal' ? 'text-emerald-400' : 'text-amber-400';
+  const accent = accentMap[theme] || '#a78bfa';
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`
-        ${sizes[size]}
-        rounded-full border-2
-        flex items-center justify-center
-        transition-all duration-200
-        ${themeColors[theme]}
-        ${isListening ? 'animate-pulse' : ''}
-        ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
-      `}
-      title={isListening ? 'Listening... click to stop' : 'Click to speak'}
       type="button"
+      title={isListening ? 'Listening… click to stop' : 'Click to speak'}
+      style={{
+        width: dim,
+        height: dim,
+        minWidth: dim,
+        minHeight: dim,
+        borderRadius: '50%',
+        border: `2px solid ${isListening ? '#ef4444' : accent}`,
+        background: isListening
+          ? 'rgba(239,68,68,0.85)'
+          : 'rgba(255,255,255,0.04)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        transition: 'all 0.2s ease',
+        flexShrink: 0,
+        animation: isListening ? 'micPulse 1.2s ease-in-out infinite' : 'none',
+        boxShadow: isListening
+          ? '0 0 20px rgba(239,68,68,0.5)'
+          : `0 0 0 transparent`,
+      }}
     >
-      {isListening
-        ? <MicOff size={iconSizes[size]} className="text-white" />
-        : <Mic size={iconSizes[size]} className={textColor} />
-      }
+      {isListening ? (
+        <MicOff size={iconSize} color="#fff" />
+      ) : (
+        <Mic size={iconSize} color={accent} />
+      )}
+      {/* Inline keyframes for pulse animation */}
+      <style jsx>{`
+        @keyframes micPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(239,68,68,0.3); }
+          50% { transform: scale(1.08); box-shadow: 0 0 25px rgba(239,68,68,0.6); }
+        }
+      `}</style>
     </button>
   );
 }
+

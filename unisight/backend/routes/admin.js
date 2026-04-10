@@ -25,6 +25,7 @@ router.post('/users/:id/reset-password', ac.adminResetPassword);
 router.post('/users/bulk-deactivate', ac.bulkDeactivateUsers);
 router.get('/system', ac.getSystemHealth);
 router.get('/logs', ac.getAdminLogs);
+router.get('/voice-status', ac.getVoiceStatus);
 // USP routes
 router.get('/dept/:dept', ac.getDeptDrilldown);
 router.get('/intervention-scores', ac.getInterventionScores);
