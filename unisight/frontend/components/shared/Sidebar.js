@@ -33,6 +33,7 @@ const NAV_ITEMS = {
   admin: [
     { href: '/admin/overview',               icon: '🌐', label: 'Overview' },
     { href: '/admin/ask',                    icon: '💬', label: 'AI Query' },
+    { href: '/admin/voice',                  icon: '🎙️', label: 'Voice Assistant' },
     { href: '/admin/curriculum',             icon: '📚', label: 'Curriculum' },
     { href: '/admin/cohort',                 icon: '👥', label: 'Cohorts' },
     { href: '/admin/faculty-effectiveness',  icon: '⭐', label: 'Faculty Stars' },
