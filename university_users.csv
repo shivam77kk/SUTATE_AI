@@ -1,0 +1,25 @@
+name,email,password,role,department,studentid
+Aarav Sharma,aarav.sharma@student.edu,student123,student,CSE,S001
+Vivaan Patel,vivaan.patel@student.edu,student123,student,CSE,S002
+Aditya Singh,aditya.singh@student.edu,student123,student,CSE,S003
+Krishna Mehta,krishna.mehta@student.edu,student123,student,CSE,S004
+Arjun Verma,arjun.verma@student.edu,student123,student,CSE,S005
+Sai Reddy,sai.reddy@student.edu,student123,student,CSE,S006
+Rohan Nair,rohan.nair@student.edu,student123,student,CSE,S007
+Karan Malhotra,karan.malhotra@student.edu,student123,student,CSE,S008
+Rahul Das,rahul.das@student.edu,student123,student,CSE,S009
+Manish Gupta,manish.gupta@student.edu,student123,student,CSE,S010
+Aryan Kulkarni,aryan.kulkarni@student.edu,student123,student,IT,T001
+Neeraj Joshi,neeraj.joshi@student.edu,student123,student,IT,T002
+Siddharth Iyer,siddharth.iyer@student.edu,student123,student,IT,T003
+Ankit Yadav,ankit.yadav@student.edu,student123,student,IT,T004
+Pranav Deshmukh,pranav.deshmukh@student.edu,student123,student,IT,T005
+Ritesh Mishra,ritesh.mishra@student.edu,student123,student,IT,T006
+Deepak Choudhary,deepak.choudhary@student.edu,student123,student,IT,T007
+Harsh Vora,harsh.vora@student.edu,student123,student,IT,T008
+Nikhil Jain,nikhil.jain@student.edu,student123,student,IT,T009
+Yash Thakur,yash.thakur@student.edu,student123,student,IT,T010
+Prof. Sharma,prof.sharma@faculty.edu,faculty123,faculty,CSE,
+Prof. Iyer,prof.iyer@faculty.edu,faculty123,faculty,CSE,
+Prof. Nair,prof.nair@faculty.edu,faculty123,faculty,IT,
+Admin User,admin@admin.edu,admin123,admin,Administration,

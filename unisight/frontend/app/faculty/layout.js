@@ -2,7 +2,7 @@
 import Sidebar from '@/components/shared/Sidebar';
 import FacultyThreeBackground from '@/components/shared/FacultyThreeBackground';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
 import api from '@/lib/axios';
 
@@ -10,6 +10,8 @@ export default function FacultyLayout({ children }) {
   const { setUser } = useAuthStore();
   const router = useRouter();
   const [verified, setVerified] = useState(false);
+
+  const pathname = usePathname();
 
   useEffect(() => {
     api.get('/auth/me')
@@ -27,6 +29,15 @@ export default function FacultyLayout({ children }) {
         router.replace('/login');
       });
   }, []);
+
+  // Ensure Admin cannot navigate to internal faculty pages other than the student view
+  useEffect(() => {
+    if (!verified) return;
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser?.role === 'admin' && !pathname.startsWith('/faculty/student')) {
+      router.replace('/admin/overview');
+    }
+  }, [pathname, verified, router]);
 
   if (!verified) return null;
 
