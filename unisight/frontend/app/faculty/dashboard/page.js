@@ -34,6 +34,11 @@ export default function FacultyDashboard() {
     queryKey: ['faculty-effectiveness'],
     queryFn: () => api.get('/faculty/effectiveness').then(r => r.data),
   });
+  
+  const { data: classesData } = useQuery({
+    queryKey: ['faculty-classes'],
+    queryFn: () => api.get('/faculty/classes').then(r => r.data),
+  });
 
   if (isLoading) return (
     <div className="dashboard-content">
@@ -46,7 +51,7 @@ export default function FacultyDashboard() {
 
   const d = dashboard || {};
   const atRisk = d.proactiveAlerts || [];
-  const classes = [];
+  const classes = classesData?.classes || [];
   const eff = effectiveness?.overall;
 
   return (

@@ -1,4 +1,4 @@
-import { runPipeline } from '../agents/pipelineGraph.js';
+import { runPipeline, setIO } from '../agents/pipelineGraph.js';
 import { findSuggestions } from '../utils/fuzzyMatch.js';
 import { parse } from 'csv-parse/sync';
 import { v4 as uuidv4 } from 'uuid';
@@ -149,6 +149,7 @@ export const uploadCSV = async (req, res) => {
     await log.save();
 
     // 4. Run pipeline
+    setIO(req.io);
     runPipeline({
       csvRows: validRows,
       uploadId: validationId,
