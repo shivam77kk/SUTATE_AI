@@ -5,6 +5,7 @@ import {
   getMyRequests,
   getFacultyQueue,
   respondToRequest,
+  updateRequestStatus,
 } from '../controllers/helpController.js';
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.get('/my', authenticate, requireRole('student'), getMyRequests);
 router.get('/my-requests', authenticate, requireRole('student'), getMyRequests);
 router.get('/faculty-queue', authenticate, requireRole('faculty', 'admin'), getFacultyQueue);
 router.patch('/:id/respond', authenticate, requireRole('faculty', 'admin'), respondToRequest);
+router.patch('/:id/status', authenticate, requireRole('faculty', 'admin'), updateRequestStatus);
 
 export default router;

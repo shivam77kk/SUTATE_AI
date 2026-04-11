@@ -42,7 +42,7 @@ export default function FacultyLayout({ children }) {
   if (!verified) return null;
 
   return (
-    <div key={`faculty-portal-${facultyId || 'anon'}`} className="dashboard-layout" style={{ position: 'relative' }}>
+    <div key="faculty-portal" className="dashboard-layout" style={{ position: 'relative' }}>
       <FacultyThreeBackground />
       {/* Mesh gradient overlay */}
       <div style={{ 

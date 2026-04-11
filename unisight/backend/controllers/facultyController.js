@@ -12,30 +12,18 @@ import { textToSpeech } from '../services/voiceService.js';
 // GET /api/faculty/dashboard
 export const getFacultyDashboard = async (req, res) => {
   try {
-    if (false && !global.dbConnected) {
-      return res.json({
-        latestUploadKpi: { processed: 15, atRiskFound: 3, improvements: 2 },
-        recentUploads: [
-          { _id: 'mock-upload-1', filename: 'cse_marks_sem4.csv', date: new Date(), status: 'COMPLETE', entries: 15, errors: 0 },
-          { _id: 'mock-upload-2', filename: 'cse_attendance_march.csv', date: new Date(Date.now() - 86400000), status: 'COMPLETE', entries: 15, errors: 0 },
-        ],
-        proactiveAlerts: [
-          { studentId: 'S007', name: 'Pooja Nair', riskLevel: 'HIGH', reason: 'Attendance dropped to 62%' },
-          { studentId: 'S008', name: 'Dev Sharma', riskLevel: 'HIGH', reason: 'Failed OS mid-sem' },
-        ],
-      });
-    }
-    const latestLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' }).sort({ createdAt: -1 });
+    const latestCompleteLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' }).sort({ createdAt: -1 });
     const recentUploads = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).limit(5);
-    const pendingAlerted = latestLog?.pendingAlerts || [];
 
-    const latestUploadKpi = latestLog
-      ? { processed: latestLog.studentCount || 0, atRiskFound: latestLog.pendingAlerts?.length || 0, improvements: 0 }
+    const latestUploadKpi = latestCompleteLog
+      ? { processed: latestCompleteLog.studentCount || 0, atRiskFound: latestCompleteLog.pendingAlerts?.length || 0, improvements: 0 }
       : null;
 
     let proactiveAlerts = [];
-    if (latestLog && latestLog.pendingAlerts?.length) {
-      const studentIds = latestLog.pendingAlerts.slice(0, 5);
+
+    if (latestCompleteLog && latestCompleteLog.pendingAlerts?.length) {
+      // Use pending alerts from the latest complete upload log
+      const studentIds = latestCompleteLog.pendingAlerts.slice(0, 5);
       proactiveAlerts = await Promise.all(studentIds.map(async (id) => {
         const user = await User.findOne({ studentId: id }).select('name department').lean();
         const insight = await Insight.findOne({ studentId: id }).sort({ createdAt: -1 }).lean();
@@ -43,7 +31,29 @@ export const getFacultyDashboard = async (req, res) => {
           studentId: id,
           name: user?.name || id,
           riskLevel: insight?.riskLevel || 'HIGH',
-          reason: insight?.riskReason || 'Performance needs review'
+          dropoutTier: insight?.dropoutTier || 'HIGH',
+          reason: insight?.riskReason || 'Performance needs review',
+          riskReason: insight?.riskReason || 'Performance needs review',
+        };
+      }));
+    } else {
+      // Fallback: pull HIGH/MEDIUM risk students directly from Insight for faculty's department
+      const facultyUser = await User.findById(req.user.userId).select('department');
+      const dept = facultyUser?.department;
+      const riskInsights = await Insight.find(
+        dept ? { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] }, department: dept }
+             : { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] } }
+      ).sort({ dropoutProbabilityScore: -1 }).limit(6).lean();
+
+      proactiveAlerts = await Promise.all(riskInsights.map(async (ins) => {
+        const user = await User.findOne({ studentId: ins.studentId }).select('name').lean();
+        return {
+          studentId: ins.studentId,
+          name: user?.name || ins.studentId,
+          riskLevel: ins.riskLevel,
+          dropoutTier: ins.dropoutTier || ins.riskLevel,
+          reason: ins.riskReason || 'Performance needs review',
+          riskReason: ins.riskReason || 'Performance needs review',
         };
       }));
     }
@@ -64,6 +74,7 @@ export const getFacultyDashboard = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 // POST /api/faculty/send-alert
 export const sendStudentAlert = async (req, res) => {
@@ -105,7 +116,6 @@ Write a 150-200 word email that is warm but firm, explaining the concern and req
 
     res.json({ success: true, emailDraft: emailText, sentTo: student?.name || studentId });
   } catch (err) {
-    console.error('[SendAlert] Error:', err);
     res.status(500).json({ error: 'Failed to generate alert: ' + err.message });
   }
 };
@@ -170,9 +180,7 @@ export const getMyClasses = async (req, res) => {
 
     const classes = Object.values(classMap).sort((a,b) => b.uploadedAt - a.uploadedAt);
     res.json({ classes });
-    res.json({ classes });
   } catch (err) {
-    console.error('[GetMyClasses]', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -250,7 +258,6 @@ export const getPendingAlerts = async (req, res) => {
 
     res.json({ hasAlerts: studentData.length > 0, count: studentData.length, students: studentData });
   } catch (err) {
-    console.error('[PendingAlerts]', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -541,7 +548,6 @@ Start with: "Here is your class summary."
       voiceAvailable: !!audioData,
     });
   } catch (err) {
-    console.error('[ClassVoiceSummary] Error:', err);
     res.status(500).json({ error: 'Could not generate voice summary' });
   }
 };
@@ -601,7 +607,6 @@ export const getFacultyEffectiveness = async (req, res) => {
     
     res.json({ overall, history });
   } catch (err) {
-    console.error('[FacultyEffectiveness]', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

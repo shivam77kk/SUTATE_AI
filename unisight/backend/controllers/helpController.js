@@ -52,8 +52,7 @@ export const submitRequest = async (req, res) => {
     }
 
     res.status(201).json({ message: 'Help request submitted', helpRequestId: request._id });
-  } catch (err) {
-    console.error('submitRequest error:', err);
+  } catch {
     res.status(500).json({ error: 'Failed to submit request' });
   }
 };
@@ -79,13 +78,16 @@ export const getFacultyQueue = async (req, res) => {
 
 export const respondToRequest = async (req, res) => {
   try {
-    const { response } = req.body;
+    const { response, status = 'resolved' } = req.body;
     if (!response?.trim()) return res.status(400).json({ error: 'Response is required' });
+
+    const validStatuses = ['in_progress', 'resolved'];
+    const newStatus = validStatuses.includes(status) ? status : 'resolved';
 
     const request = await HelpRequest.findByIdAndUpdate(
       req.params.id,
       {
-        status: 'responded',
+        status: newStatus,
         facultyResponse: response.trim(),
         respondedAt: new Date(),
         respondedBy: req.user.name,
@@ -100,7 +102,7 @@ export const respondToRequest = async (req, res) => {
         userId: request.studentUserId,
         type: 'system',
         title: 'Faculty responded to your help request',
-        message: `${req.user.name} responded to your request about ${request.subject}`,
+        message: `${req.user.name} responded to your request about "${request.subject}"`,
         isRead: false,
         metadata: { requestId: request._id.toString() },
       });
@@ -112,8 +114,28 @@ export const respondToRequest = async (req, res) => {
     }
 
     res.json({ message: 'Response sent', request });
-  } catch (err) {
-    console.error('respondToRequest error:', err);
+  } catch {
     res.status(500).json({ error: 'Failed to send response' });
+  }
+};
+
+export const updateRequestStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['open', 'in_progress', 'resolved', 'pending'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: open, in_progress, resolved, or pending' });
+    }
+
+    const request = await HelpRequest.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    res.json({ message: 'Status updated', request });
+  } catch {
+    res.status(500).json({ error: 'Failed to update status' });
   }
 };

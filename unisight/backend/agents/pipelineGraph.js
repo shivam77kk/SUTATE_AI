@@ -15,52 +15,57 @@ let ioInstance = null;
 export function setIO(io) { ioInstance = io; }
 
 const transporter = {
-  sendMail: async () => { console.log('[Mailer Stub] Email sent from pipelineGroup'); }
+  sendMail: async () => {}
 };
 
-// ─── AGENT 1: Column Normaliser ───
-async function normaliseColumns(rawRows) {
+// Agent 1: Column Normaliser
+function normaliseColumns(rawRows) {
   if (!rawRows.length) throw new Error('CSV is empty');
-  const sampleHeaders = Object.keys(rawRows[0]).join(', ');
-  const prompt = `
-You are a CSV column normaliser for a university marks system.
-The CSV has these column headers: ${sampleHeaders}
 
-Map them to these standardised field names:
-- studentId (roll number or student ID)
-- name (student name)
-- subject (subject name)
-- ut1 (Unit Test 1 marks, 0-30)
-- midSem (Mid Semester marks, 0-30)
-- ut2 (Unit Test 2 marks, 0-30)
-- endSem (End Semester marks, 0-70)
-- attendanceAttended (classes attended count)
-- attendanceTotal (total classes held)
-- overallActivityScore (participation metric 0-100)
-- assignmentSubmissionRate (0-100)
-- labCompletionRate (0-100)
-- classParticipationScore (0-100)
+  // Rule-based mapping — covers all common CSV header variants
+  const RULES = [
+    { keys: ['roll no', 'roll_no', 'rollno', 'student id', 'student_id', 'studentid', 'id', 'regno', 'reg no'], target: 'studentId' },
+    { keys: ['name', 'student name', 'student_name', 'full name', 'fullname'], target: 'name' },
+    { keys: ['subject', 'subject name', 'course', 'paper'], target: 'subject' },
+    { keys: ['ut1', 'unit test 1', 'unit_test_1', 'ut-1', 'ut 1', 'test1', 'test 1', 'ia1', 'ia 1'], target: 'ut1' },
+    { keys: ['midsem', 'mid sem', 'mid-sem', 'midterm', 'mid term', 'mid semester', 'mid-semester', 'midexam'], target: 'midSem' },
+    { keys: ['ut2', 'unit test 2', 'unit_test_2', 'ut-2', 'ut 2', 'test2', 'test 2', 'ia2', 'ia 2'], target: 'ut2' },
+    { keys: ['endsem', 'end sem', 'end-sem', 'endterm', 'end term', 'end semester', 'final', 'final exam', 'semester exam'], target: 'endSem' },
+    { keys: ['attendance %', 'attendance%', 'att %', 'att%', 'attendance percent', 'attendance percentage', 'overall attendance'], target: 'attendancePct' },
+    { keys: ['attended', 'classes attended', 'attendance attended', 'present'], target: 'attendanceAttended' },
+    { keys: ['total classes', 'total', 'attendance total', 'classes held'], target: 'attendanceTotal' },
+    { keys: ['activity score', 'overall activity', 'participation', 'participation score', 'activity'], target: 'overallActivityScore' },
+  ];
 
-RULES:
-1. Return ONLY the JSON object.
-2. NO comments (// or /*) inside JSON.
-3. NO trailing commas.
+  const headers = Object.keys(rawRows[0]);
 
-Return ONLY a JSON object like:
-{"Roll No": "studentId", "Student Name": "name", "Subject": "subject", "Activity Metric": "overallActivityScore"}
-Map ONLY the columns that exist. If a column cannot be mapped, omit it.
-`;
-  const mapping = await callGeminiJSON(prompt);
+  // Build mapping: original header → standardised field
+  const mapping = {};
+  for (const header of headers) {
+    const lh = header.toLowerCase().trim();
+    for (const rule of RULES) {
+      if (rule.keys.includes(lh)) {
+        mapping[header] = rule.target;
+        break;
+      }
+    }
+  }
+
   return rawRows.map(row => {
     const norm = {};
     for (const [original, standardised] of Object.entries(mapping)) {
       if (row[original] !== undefined) norm[standardised] = row[original];
     }
+    // If attendancePct is present but attendanceAttended/Total are not, derive them
+    if (norm.attendancePct !== undefined && norm.attendanceAttended === undefined) {
+      norm.attendanceAttended = Math.round((Number(norm.attendancePct) / 100) * 24);
+      norm.attendanceTotal = 24;
+    }
     return norm;
   });
 }
 
-// ─── AGENT 2: Performance Analyser ───
+// Agent 2: Performance Analyser
 function analysePerformance(normRows) {
   const studentMap = {};
   for (const row of normRows) {
@@ -109,7 +114,7 @@ function analysePerformance(normRows) {
   });
 }
 
-// ─── AGENT 3: Dropout Probability (formerly Risk Detector) ───
+// Agent 3: Dropout Probability
 async function computeDropoutProbability(students, classId, attendanceThreshold = 75, passingScoreThreshold = 40) {
   const results = [];
   for (const student of students) {
@@ -173,7 +178,7 @@ async function computeDropoutProbability(students, classId, attendanceThreshold 
   return results;
 }
 
-// ─── AGENT 4: Recommendation Engine ───
+// Agent 4: Recommendation Engine
 async function generateRecommendations(students, classId, department, semester, facultyId) {
   const savedInsights = [];
   const ranked = [...students].sort((a, b) => b.avgScore - a.avgScore);
@@ -378,7 +383,7 @@ Resources: suggest ONE specific named resource per weak subject (YouTube channel
   return savedInsights;
 }
 
-// ─── MAIN PIPELINE RUNNER ───
+// Main pipeline runner
 export async function runPipeline({ csvRows, uploadId, classId, department, semester, facultyId }) {
   const startTime = Date.now();
   const emit = (agent, status) => {
