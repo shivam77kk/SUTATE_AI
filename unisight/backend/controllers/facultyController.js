@@ -33,6 +33,21 @@ export const getFacultyDashboard = async (req, res) => {
       ? { processed: latestLog.studentCount || 0, atRiskFound: latestLog.pendingAlerts?.length || 0, improvements: 0 }
       : null;
 
+    let proactiveAlerts = [];
+    if (latestLog && latestLog.pendingAlerts?.length) {
+      const studentIds = latestLog.pendingAlerts.slice(0, 5);
+      proactiveAlerts = await Promise.all(studentIds.map(async (id) => {
+        const user = await User.findOne({ studentId: id }).select('name department').lean();
+        const insight = await Insight.findOne({ studentId: id }).sort({ createdAt: -1 }).lean();
+        return {
+          studentId: id,
+          name: user?.name || id,
+          riskLevel: insight?.riskLevel || 'HIGH',
+          reason: insight?.riskReason || 'Performance needs review'
+        };
+      }));
+    }
+
     res.json({
       latestUploadKpi,
       recentUploads: recentUploads.map(u => ({
@@ -43,7 +58,7 @@ export const getFacultyDashboard = async (req, res) => {
         entries: u.studentCount || 0,
         errors: u.errorCount || 0,
       })),
-      proactiveAlerts: [],
+      proactiveAlerts,
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

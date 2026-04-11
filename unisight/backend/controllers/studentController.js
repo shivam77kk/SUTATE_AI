@@ -320,7 +320,19 @@ export const downloadReport = async (req, res) => {
 };
 
 export const getChatHistory = async (req, res) => {
-  res.json({ history: [] });
+  try {
+    const { studentId } = req.user;
+    const chatDoc = await ChatHistory.findOne({ studentId });
+    res.json({ 
+      history: chatDoc?.messages?.map(m => ({ 
+        role: m.role, 
+        content: m.content,
+        timestamp: m.createdAt 
+      })) || [] 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
 };
 
 // POST /api/student/chat
