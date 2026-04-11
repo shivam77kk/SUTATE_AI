@@ -13,41 +13,39 @@ export const geminiQueue = new PQueue({
 });
 
 const FALLBACK_MODELS = [
-  'gemini-2.0-flash-exp',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
   'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
 ];
 
 let model = null;
 let activeModelName = null;
+let modelIndex = 0;
 
-async function getWorkingModel() {
-  for (const modelName of FALLBACK_MODELS) {
-    try {
-      const testModel = genAI.getGenerativeModel({ model: modelName });
-      await testModel.generateContent('test');
-      console.log(`Gemini using model: ${modelName}`);
-      activeModelName = modelName;
-      return testModel;
-    } catch (error) {
-      console.warn(`Model ${modelName} failed, trying next fallback...`);
-    }
-  }
-  throw new Error('All fallback models failed');
+function getModelByIndex(idx) {
+  const name = FALLBACK_MODELS[idx % FALLBACK_MODELS.length];
+  activeModelName = name;
+  return genAI.getGenerativeModel({ model: name });
 }
 
 export async function getModel() {
   if (!model) {
-    model = await getWorkingModel();
+    model = getModelByIndex(modelIndex);
+    console.log(`Gemini using model: ${activeModelName}`);
   }
   return model;
 }
 
+function advanceModel() {
+  modelIndex = (modelIndex + 1) % FALLBACK_MODELS.length;
+  model = null;
+  activeModelName = null;
+}
+
 export async function callGemini(prompt, options = {}) {
   return geminiQueue.add(async () => {
-    let retries = 0;
-    while (retries < FALLBACK_MODELS.length + 1) {
+    let lastErr;
+    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
       try {
         const workingModel = await getModel();
         const result = await workingModel.generateContent({
@@ -61,33 +59,31 @@ export async function callGemini(prompt, options = {}) {
         if (!text.trim()) throw new Error('Empty response');
         return text;
       } catch (err) {
-        console.warn(`Gemini call failed on ${activeModelName || 'unknown'}: ${err?.message || 'unknown'}`);
-        model = null;
-        activeModelName = null;
-        retries++;
+        lastErr = err;
+        console.warn(`Gemini [${activeModelName}] failed: ${err?.status || err?.message || 'unknown'}`);
+        advanceModel();
       }
     }
-    throw new Error('All Gemini models failed');
+    throw lastErr || new Error('All Gemini models failed');
   });
 }
 
 export async function callGeminiWithParts(parts, options = {}) {
   return geminiQueue.add(async () => {
-    let retries = 0;
-    while (retries < FALLBACK_MODELS.length + 1) {
+    let lastErr;
+    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
       try {
         const workingModel = await getModel();
         const result = await workingModel.generateContent(parts);
         const text = result?.response?.text?.() ?? '';
         return text;
       } catch (err) {
-        console.warn(`Gemini Parts call failed on ${activeModelName || 'unknown'}: ${err?.message || 'unknown'}`);
-        model = null;
-        activeModelName = null;
-        retries++;
+        lastErr = err;
+        console.warn(`Gemini Parts [${activeModelName}] failed: ${err?.status || err?.message || 'unknown'}`);
+        advanceModel();
       }
     }
-    throw new Error('All Gemini models failed for parts');
+    throw lastErr || new Error('All Gemini models failed for parts');
   });
 }
 

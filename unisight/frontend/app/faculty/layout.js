@@ -17,7 +17,7 @@ export default function FacultyLayout({ children }) {
         setUser(data.user);
         if (data.user.isFirstLogin) {
           router.replace('/change-password');
-        } else if (data.user.role !== 'faculty') {
+        } else if (data.user.role !== 'faculty' && data.user.role !== 'admin') {
           router.replace(`/${data.user.role === 'student' ? 'student' : 'admin'}/dashboard`);
         } else {
           setVerified(true);

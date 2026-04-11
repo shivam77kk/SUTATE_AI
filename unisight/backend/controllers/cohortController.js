@@ -9,12 +9,23 @@ export const getCohorts = async (req, res) => {
     const cohorts = await Promise.all(depts.filter((d) => d !== 'Administration').map(async (dept) => {
       const insights = await Insight.find({ department: dept }).sort({ createdAt: -1 });
       const atRisk = insights.filter((i) => ['HIGH', 'CRITICAL'].includes(i.dropoutTier)).length;
+      const avgCgpa = insights.length
+        ? insights.reduce((sum, i) => sum + (i.cgpa || 0), 0) / insights.length
+        : 0;
+      const avgDropoutScore = insights.length
+        ? insights.reduce((sum, i) => sum + (i.dropoutProbabilityScore || 0), 0) / insights.length
+        : 0;
       return {
         cohortId: `${dept}-2024`,
+        cohortName: `${dept} Batch 2024`,
         department: dept,
+        year: 2022,
         admissionYear: 2022,
         currentSemester: 4,
+        studentCount: insights.length,
         totalStudents: insights.length,
+        avgCgpa,
+        avgDropoutScore,
         atRiskPercentage: insights.length ? Math.round((atRisk / insights.length) * 100) : 0,
         retentionRisk: atRisk > insights.length * 0.3 ? 'high' : atRisk > insights.length * 0.15 ? 'moderate' : 'low',
       };
@@ -34,25 +45,26 @@ export const getCohortById = async (req, res) => {
       ? Math.round((insights.reduce((sum, item) => sum + (item.cgpa || 0), 0) / insights.length) * 10) / 10
       : 0;
 
+    const totalStudents = insights.length || 1;
     res.json({
-      cohortId: req.params.cohortId,
-      department: dept,
-      semesterData: [{
-        semester: 'Sem 4',
-        avgCgpa,
-        atRiskPct: Math.round((atRisk / (insights.length || 1)) * 100),
-        passRate: Math.round(((insights.length - atRisk) / (insights.length || 1)) * 100),
-      }],
-      aiPrediction: {
-        predictedDropouts: Math.max(0, Math.round(atRisk * 0.4)),
-        confidence: 68,
-        summary: `Based on current risk profiles, ${Math.round(atRisk * 0.4)} students are predicted to drop or need intervention in the next semester.`,
-      },
-      students: insights.map((i) => ({
-        studentId: i.studentId,
-        dropoutProbability: i.dropoutProbabilityScore ?? i.dropoutProbability ?? 0,
-        dropoutTier: i.dropoutTier,
-      })),
+      cohort: {
+        cohortId: req.params.cohortId,
+        department: dept,
+        startingStudentCount: totalStudents,
+        projectedFinalDropoutRate: Math.round(((Math.max(0, Math.round(atRisk * 0.4))) / totalStudents) * 100),
+        aiAlertSummary: `Based on current risk profiles, ${Math.max(0, Math.round(atRisk * 0.4))} students are predicted to drop or need intervention in the next semester.`,
+        semesterData: [{
+          semester: 'Sem 4',
+          avgCgpa,
+          atRiskPct: Math.round((atRisk / totalStudents) * 100),
+          passRate: Math.round(((insights.length - atRisk) / totalStudents) * 100),
+        }],
+        students: insights.map((i) => ({
+          studentId: i.studentId,
+          dropoutProbability: i.dropoutProbabilityScore ?? i.dropoutProbability ?? 0,
+          dropoutTier: i.dropoutTier,
+        }))
+      }
     });
   } catch {
     res.status(500).json({ error: 'Failed to load cohort' });

@@ -40,6 +40,7 @@ const NAV_ITEMS = {
     { href: '/admin/interventions',          icon: '🎯', label: 'Interventions' },
     { href: '/admin/report',                 icon: '📄', label: 'Reports' },
     { href: '/admin/users',                  icon: '👥', label: 'Users' },
+    { href: '/admin/sheets',                 icon: '🔗', label: 'Google Sheets' },
     { href: '/admin/system',                 icon: '⚙️', label: 'System Health' },
     { href: '/admin/logs',                   icon: '📋', label: 'Audit Logs' },
   ],

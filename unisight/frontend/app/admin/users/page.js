@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal';
 import { TableSkel, CardSkel } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 
 const ROLES = ['student', 'faculty', 'admin'];
 
@@ -135,7 +136,17 @@ export default function UsersPage() {
   return (
     <div className="dashboard-content">
       <PageHeader title="👥 User Management" subtitle="Manage student, faculty, and admin accounts"
-        action={<button onClick={() => { setEditUser(null); setModalError(''); setModalOpen(true); }} style={{ padding: '10px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', minHeight: 44 }}>+ Add User</button>} />
+        action={
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Link href="/admin/users/bulk" style={{ padding: '10px 18px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontWeight: 600, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+              📥 Bulk Import
+            </Link>
+            <button onClick={() => { setEditUser(null); setModalError(''); setModalOpen(true); }} style={{ padding: '10px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', minHeight: 44 }}>
+              + Add User
+            </button>
+          </div>
+        } 
+      />
 
       <Tabs tabs={['all', 'student', 'faculty', 'admin'].map(t => ({ label: t.charAt(0).toUpperCase() + t.slice(1), value: t }))} active={tab} onChange={t => { setTab(t); setPage(1); }} />
 

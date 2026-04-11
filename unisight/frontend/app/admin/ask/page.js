@@ -117,7 +117,6 @@ export default function AskPage() {
   const [elevenLabsOk, setElevenLabsOk] = useState(null); 
   const recognitionRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const audioChunksRef = useRef([]);
   // Ref so mutationFn always reads the fresh value (avoids stale closure)
   const voiceModeRef  = useRef(true);
   const queryRef      = useRef('');
