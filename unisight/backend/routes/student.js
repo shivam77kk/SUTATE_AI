@@ -14,7 +14,7 @@ router.get('/timeline', sc.getTimeline);
 router.get('/study-plan', sc.getStudyPlan);
 router.post('/study-plan', sc.getStudyPlan);
 router.get('/activity', sc.getActivity);
-router.get('/goals', sc.getGoals);
+
 router.get('/achievements', sc.getAchievements);
 router.get('/report-pdf', sc.downloadReport);
 router.get('/report/pdf', sc.downloadReport);
@@ -23,5 +23,5 @@ router.get('/longitudinal', sc.getLongitudinalData);
 router.get('/chat', sc.getChatHistory);
 router.post('/chat', geminiLimiter, sc.chatWithAI);
 router.post('/quiz/generate', geminiLimiter, sc.generateQuiz);
-router.post('/goals', sc.updateGoal);
+
 export default router;

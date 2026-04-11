@@ -4,18 +4,19 @@ import User from '../models/User.js';
 
 export const submitRequest = async (req, res) => {
   try {
-    const { subject, description, urgency = 'general' } = req.body;
-    if (!subject || !description) return res.status(400).json({ error: 'subject and description required' });
+    const { category, subject, description, urgency = 'general' } = req.body;
+    if (!subject || !description || !category) return res.status(400).json({ error: 'category, subject and description required' });
 
     const request = await HelpRequest.create({
       studentId: req.user.studentId,
       studentName: req.user.name,
       studentUserId: req.user.userId,
       department: req.user.department,
+      category,
       subject: subject.trim(),
       description: description.trim(),
       urgency,
-      status: 'pending',
+      status: 'open',
     });
 
     // Notify Faculty of the department and all Admins

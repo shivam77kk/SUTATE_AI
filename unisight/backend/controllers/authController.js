@@ -12,10 +12,14 @@ export const login = async (req, res) => {
     const emailLower = email.toLowerCase();
 
     const user = await User.findOne({ email: emailLower });
+    console.log(`[Login] Email: ${emailLower}, User found: ${!!user}, Role: ${user?.role}`);
+
     if (!user)
       return res.status(401).json({ error: 'Invalid email or password' });
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log(`[Login] Password match: ${isMatch}`);
+
     if (!isMatch)
       return res.status(401).json({ error: 'Invalid email or password' });
 

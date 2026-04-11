@@ -24,10 +24,32 @@ export const validateCSV = async (req, res) => {
     const validRows = [];
     let matchedCount = 0;
 
+    // ── Flexible student ID column detection ──
+    const STUDENT_ID_HEADERS = [
+      'Roll No', 'Roll_No', 'RollNo', 'roll_no', 'rollno', 'roll no',
+      'Student ID', 'Student_ID', 'StudentID', 'student_id', 'studentId', 'studentid',
+      'ID', 'id', 'Roll', 'roll', 'Registration No', 'Reg No', 'reg_no',
+      'Enrollment No', 'enrollment_no', 'EnrollmentNo',
+    ];
+
+    // Find which header exists in the CSV
+    const csvHeaders = csvRows.length > 0 ? Object.keys(csvRows[0]) : [];
+    const studentIdHeader = csvHeaders.find(h => 
+      STUDENT_ID_HEADERS.includes(h) || 
+      STUDENT_ID_HEADERS.map(s => s.toLowerCase()).includes(h.toLowerCase())
+    );
+
+    const errors = [];
+    const warnings = [];
+
+    if (!studentIdHeader) {
+      warnings.push(`No recognized student ID column found. Looked for: Roll No, Student ID, studentId, id. Found columns: ${csvHeaders.join(', ')}`);
+    }
+
     // ── Check each row against registered students ──
     for (let i = 0; i < csvRows.length; i++) {
       const row = csvRows[i];
-      const studentId = row['Roll No'] || row['Student ID'] || row['studentId'];
+      const studentId = studentIdHeader ? row[studentIdHeader] : (row['Roll No'] || row['Student ID'] || row['studentId']);
       
       if (!studentId) {
         mismatches.push({
@@ -35,6 +57,7 @@ export const validateCSV = async (req, res) => {
           originalId: 'MISSING',
           suggestions: []
         });
+        errors.push(`Row ${i + 1}: Missing student ID`);
         continue;
       }
 
@@ -54,7 +77,13 @@ export const validateCSV = async (req, res) => {
           originalId: studentId,
           suggestions
         });
+        errors.push(`Row ${i + 1}: Student ID "${studentId}" not registered in system`);
       }
+    }
+
+    // If NO students matched but we have rows, add a helpful warning
+    if (matchedCount === 0 && csvRows.length > 0) {
+      warnings.push(`None of the ${csvRows.length} student IDs in the CSV matched registered students. Make sure students are registered first via Admin → Users.`);
     }
 
     // ── Create a 'pending_validation' log to store results ──
@@ -78,8 +107,12 @@ export const validateCSV = async (req, res) => {
       validationId,
       totalRows: csvRows.length,
       matchedCount,
+      validRows: matchedCount,
       mismatchCount: mismatches.length,
+      errorRows: mismatches.length,
       mismatches: mismatches.slice(0, 10), // Return first 10 for UI preview
+      errors: errors.slice(0, 20),
+      warnings,
       requiresApproval: mismatches.length > 0
     });
 

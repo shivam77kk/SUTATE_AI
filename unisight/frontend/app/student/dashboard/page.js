@@ -102,9 +102,14 @@ function WhatIfSimulator({ dashboard }) {
 }
 
 function GoalArcDisplay({ goal, onSetGoal, currentCgpa }) {
-  const [sliderVal, setSliderVal] = useState(currentCgpa || 7.0);
+  const [sliderVal, setSliderVal] = useState(goal?.targetCgpa || currentCgpa || 7.0);
   const [showSlider, setShowSlider] = useState(false);
   const qc = useQueryClient();
+
+  useEffect(() => {
+    if (goal?.targetCgpa) setSliderVal(goal.targetCgpa);
+    else if (currentCgpa) setSliderVal(currentCgpa);
+  }, [goal?.targetCgpa, currentCgpa]);
 
   const mutation = useMutation({
     mutationFn: (targetCgpa) => api.post('/student/goals', { targetCgpa }),
@@ -189,13 +194,13 @@ function GoalArcDisplay({ goal, onSetGoal, currentCgpa }) {
           borderRadius: 999, 
           fontSize: 11, 
           fontWeight: 600,
-          background: goal.status === 'on_track' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-          color: goal.status === 'on_track' ? '#10b981' : '#f59e0b',
+          background: goal.onTrack ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+          color: goal.onTrack ? '#10b981' : '#f59e0b',
         }}
       >
-        {goal.status === 'on_track' ? '✓ On track' : '⚠ Behind pace'}
+        {goal.onTrack ? '✓ On track' : '⚠ Behind pace'}
       </motion.span>
-      {goal.projection && <p style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', marginTop: 8 }}>{goal.projection}</p>}
+      {goal.requiredActions && <p style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', marginTop: 8 }}>{goal.requiredActions}</p>}
       <button 
         onClick={() => setShowSlider(true)} 
         className="text-xs bg-transparent border-none cursor-pointer mt-2"

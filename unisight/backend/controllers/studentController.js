@@ -4,6 +4,7 @@ import Attendance from '../models/Attendance.js';
 import Insight from '../models/Insight.js';
 import Alert from '../models/Alert.js';
 import ChatHistory from '../models/ChatHistory.js';
+import StudentGoal from '../models/StudentGoal.js';
 import { callGemini, callGeminiJSON } from '../services/geminiService.js';
 import PDFDocument from 'pdfkit';
 
@@ -252,19 +253,64 @@ export const getActivity = async (req, res) => {
   res.json({ assignmentSubmissionPct: 85, labCompletionPct: 90, participationScore: 75 });
 };
 
+// GET /api/student/goals
 export const getGoals = async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId);
-    res.json({ goal: { currentCgpa: 7.2, targetCgpa: user?.targetCgpa || 8.0, status: 'on_track', projection: 'Keep it up!' } });
-  } catch(err) { res.status(500).json({ error: 'Server error' }); }
+    const { studentId } = req.user;
+    const [user, insight, goalDoc] = await Promise.all([
+      User.findById(req.user.userId),
+      Insight.findOne({ studentId }).sort({ createdAt: -1 }),
+      StudentGoal.findOne({ studentId })
+    ]);
+
+    const currentCgpa = insight?.cgpa || 0;
+    const targetCgpa = goalDoc?.targetCgpa || user?.targetCgpa || 8.0;
+    
+    // Status Logic
+    let status = 'on_track';
+    if (currentCgpa < targetCgpa - 0.5) status = 'behind_pace';
+    else if (currentCgpa < targetCgpa) status = 'at_risk';
+
+    res.json({ 
+      goal: { 
+        currentCgpa, 
+        targetCgpa, 
+        status, 
+        projection: status === 'on_track' ? 'You are doing great! Stay consistent.' : 'Focus on active recall and previous papers to bridge the gap.',
+        requiredActions: goalDoc?.requiredActions || 'Increase focus on major core subjects.'
+      } 
+    });
+  } catch(err) { 
+    console.error('[Goals] GET Error:', err);
+    res.status(500).json({ error: 'Server error' }); 
+  }
 };
 
+// POST /api/student/goals
 export const updateGoal = async (req, res) => {
   try {
     const { targetCgpa } = req.body;
-    await User.findByIdAndUpdate(req.user.userId, { targetCgpa });
-    res.json({ message: 'Goal updated' });
+    const { studentId } = req.user;
+    
+    const user = await User.findById(req.user.userId);
+    
+    await Promise.all([
+      User.findByIdAndUpdate(req.user.userId, { targetCgpa }),
+      StudentGoal.findOneAndUpdate(
+        { studentId },
+        { 
+          targetCgpa, 
+          semester: user.semester || 4, 
+          academicYear: '2024-25',
+          lastCalculatedAt: new Date()
+        },
+        { upsert: true }
+      )
+    ]);
+
+    res.json({ message: 'Goal updated successfully' });
   } catch (err) {
+    console.error('[Goals] POST Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -555,30 +601,40 @@ export const getStudyPlan = async (req, res) => {
     if (!insight) return res.json({ plan: [] });
 
     const marks = await Marks.find({ studentId });
-    const customSubjects = req.body?.subjects;
+    const customSubjects = req.body?.subjects; // [{ subject, examDate, hoursPerDay }]
     
-    let subjectList = 'General Studies';
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    
+    let subjectContext = '';
     if (customSubjects && customSubjects.length > 0) {
-      subjectList = customSubjects.map(s => s.subject).join(', ');
+      subjectContext = customSubjects.map(s => 
+        `${s.subject} (Exam: ${s.examDate || 'TBD'}, Goal: ${s.hoursPerDay || 2} hrs/day)`
+      ).join(', ');
     } else {
-      subjectList = marks.sort((a, b) => {
+      const topSubjects = marks.sort((a, b) => {
         const ta = (a.scores?.ut1 || 0) + (a.scores?.midSem || 0);
         const tb = (b.scores?.ut1 || 0) + (b.scores?.midSem || 0);
         return ta - tb;
-      })[0]?.subject || 'General Studies';
+      }).slice(0, 4).map(s => s.subject);
+      subjectContext = topSubjects.join(', ') || 'General Studies';
     }
 
-    const prompt = `Generate a 4-week study plan JSON for subjects: ${subjectList}. Student CGPA: ${insight.cgpa}, Risk: ${insight.dropoutTier || insight.riskLevel}. Return exactly this JSON format: {"plan":[{"week":1,"startDate":"15 May","endDate":"21 May","tasks":[{"day":"Mon","subject":"<subj>","topic":"<topic>","duration":2}]}]}`;
+    const prompt = `Generate a 4-week study plan JSON starting from ${todayStr} 2026 for: ${subjectContext}. Student CGPA: ${insight.cgpa}, Risk: ${insight.dropoutTier || insight.riskLevel}. 
+IMPORTANT: The plan must lead up to the exam dates provided. If today is close to an exam, prioritize that subject.
+Return exactly this JSON format: {"plan":[{"week":1,"startDate":"${todayStr}","endDate":"<date>","tasks":[{"day":"Mon","subject":"<subj>","topic":"<topic>","duration":2}]}]}`;
+    
     const fallback = {
       plan: [
-        { week: 1, startDate: '15 May', endDate: '21 May', tasks: [{ day: 'Mon', subject: subjectList, topic: 'Revise basics', duration: 2 }] },
-        { week: 2, startDate: '22 May', endDate: '28 May', tasks: [{ day: 'Mon', subject: subjectList, topic: 'Practice advanced', duration: 2 }] },
-        { week: 3, startDate: '29 May', endDate: '4 Jun', tasks: [{ day: 'Wed', subject: subjectList, topic: 'Mock test', duration: 3 }] },
-        { week: 4, startDate: '5 Jun', endDate: '11 Jun', tasks: [{ day: 'Fri', subject: subjectList, topic: 'Final revision', duration: 2 }] },
+        { week: 1, startDate: todayStr, endDate: '17 Apr', tasks: [{ day: 'Mon', subject: 'Core Subjects', topic: 'Fundamentals', duration: 2 }] },
+        { week: 2, startDate: '18 Apr', endDate: '24 Apr', tasks: [{ day: 'Mon', subject: 'Core Subjects', topic: 'Deep Dive', duration: 2 }] },
+        { week: 3, startDate: '25 Apr', endDate: '1 May', tasks: [{ day: 'Mon', subject: 'All Subjects', topic: 'Mock Test', duration: 3 }] },
+        { week: 4, startDate: '2 May', endDate: '8 May', tasks: [{ day: 'Mon', subject: 'Final Review', topic: 'Final Prep', duration: 2 }] },
       ],
     };
-    const plan = await callGeminiJSON(prompt, fallback);
-    res.json(plan?.plan ? plan : fallback);
+
+    const planData = await callGeminiJSON(prompt, fallback);
+    res.json(planData?.plan ? planData : fallback);
   } catch (err) {
     console.error('[StudyPlan] Error:', err);
     res.status(500).json({ error: 'Failed to generate study plan' });
