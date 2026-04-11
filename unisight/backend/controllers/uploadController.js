@@ -63,7 +63,7 @@ export const validateCSV = async (req, res) => {
       facultyId: req.user.userId,
       classId: req.body.classId || 'PENDING',
       department,
-      semester: Number(req.body.semester) || 0,
+      semester: parseInt(req.body.semester) || 4,
       originalFilename: req.file.originalname,
       status: mismatches.length > 0 ? 'failed_validation' : 'validated',
       validationMetadata: {
@@ -111,7 +111,7 @@ export const uploadCSV = async (req, res) => {
     // 3. Update log status to processing
     log.status = 'processing';
     log.classId = classId;
-    log.semester = Number(semester);
+    log.semester = parseInt(semester) || log.semester || 4;
     log.studentCount = validRows.length;
     await log.save();
 
@@ -121,7 +121,7 @@ export const uploadCSV = async (req, res) => {
       uploadId: validationId,
       classId,
       department,
-      semester: Number(semester),
+      semester: parseInt(semester) || log.semester || 4,
       facultyId: req.user.userId,
     }).catch(err => {
       console.error('[Pipeline] Error:', err);

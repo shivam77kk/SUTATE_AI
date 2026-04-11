@@ -10,22 +10,46 @@ import PDFDocument from 'pdfkit';
 // GET /api/student/me
 export const getStudentProfile = async (req, res) => {
   try {
-    if (false && !global.dbConnected) {
-      return res.json({
-        user: {
-          name: 'Riya Shah',
-          email: 'riya.shah@student.edu',
-          studentId: 'S001',
-          department: 'CSE',
-          admissionYear: 2022,
-          avatar: null
-        }
-      });
-    }
-    const user = await User.findById(req.user.userId).select('-password');
+    const user = await User.findById(req.user.userId).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ student: user });
+
+    const { studentId, department } = user;
+    let insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
+    const attendanceRows = await Attendance.find({ studentId });
+    const marksRows = await Marks.find({ studentId });
+    
+    // Aggregation Fallback if Insight is missing
+    let cgpa = insight?.cgpa ?? null;
+    if (!cgpa && marksRows.length > 0) {
+      const totalPossible = marksRows.length * 160;
+      const totalScored = marksRows.reduce((sum, m) => 
+        sum + (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0), 0);
+      cgpa = (totalScored / totalPossible) * 10;
+    }
+
+    const avgAttendance = attendanceRows.length
+      ? Math.round(attendanceRows.reduce((sum, row) => sum + (row.percentage || 0), 0) / attendanceRows.length)
+      : 0;
+
+    const subjects = attendanceRows.map(a => ({
+      subject: a.subject,
+      percentage: a.percentage
+    }));
+
+    res.json({ 
+      ...user,
+      cgpa: cgpa ? parseFloat(cgpa.toFixed(2)) : 0,
+      dropoutProbability: insight?.dropoutProbabilityScore ?? insight?.dropoutProbability ?? 12,
+      dropoutTier: insight?.dropoutTier ?? insight?.riskLevel ?? 'LOW',
+      avgAttendance,
+      classRank: insight?.classRank ?? '--',
+      totalStudents: await User.countDocuments({ role: 'student', department }),
+      subjects,
+      semester: insight?.semester ?? user.semester ?? 4,
+      department
+    });
   } catch (err) {
+    console.error('[Profile] Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -246,7 +270,31 @@ export const updateGoal = async (req, res) => {
 };
 
 export const getAchievements = async (req, res) => {
-  res.json({ streak: 5, goalsMet: 2, quizzesCompleted: 15 });
+  try {
+    const { studentId } = req.user;
+    
+    const [chatDoc, goal, insights] = await Promise.all([
+      ChatHistory.findOne({ studentId }),
+      StudentGoal.findOne({ studentId }),
+      Insight.find({ studentId }).lean()
+    ]);
+
+    // Calculate streak from chat messages (simplified: count of unique days active in chat)
+    const dates = chatDoc?.messages?.map(m => m.timestamp.toISOString().split('T')[0]) || [];
+    const streak = new Set(dates).size;
+
+    // Goals met: current CGPA >= target
+    const currentCgpa = insights.sort((a,b) => b.createdAt - a.createdAt)[0]?.cgpa || 0;
+    const goalsMet = (goal && currentCgpa >= goal.targetCgpa) ? 1 : 0;
+
+    res.json({ 
+      streak, 
+      goalsMet, 
+      quizzesCompleted: Math.floor(streak * 1.5) // Placeholder: derive from activity later if model exists
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch achievements' });
+  }
 };
 
 export const updateParentContact = async (req, res) => {
@@ -255,6 +303,7 @@ export const updateParentContact = async (req, res) => {
 
 // GET /api/student/report/pdf
 export const downloadReport = async (req, res) => {
+  let doc;
   try {
     const { studentId } = req.user;
     const user = await User.findById(req.user.userId).select('-password');
@@ -262,60 +311,66 @@ export const downloadReport = async (req, res) => {
     const attendance = await Attendance.find({ studentId });
     const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
 
-    const doc = new PDFDocument({ margin: 40 });
+    doc = new PDFDocument({ margin: 40, size: 'A4' });
+
+    // Set headers before piping
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="report-${studentId}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="SUTATE_Report_${studentId}.pdf"`);
+
     doc.pipe(res);
 
-    // Header
-    doc.fontSize(20).fillColor('#6366F1').text('UniSight Student Report', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(12).fillColor('#333').text(`Student: ${user?.name || studentId}`, { align: 'center' });
-    doc.text(`Department: ${user?.department || 'N/A'} | ID: ${studentId}`, { align: 'center' });
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    // Header Content
+    doc.fontSize(24).fillColor('#6366F1').font('Helvetica-Bold').text('SUTATE AI', { align: 'right' });
+    doc.fontSize(10).fillColor('#64748b').text('University Smart Advisor System', { align: 'right' });
+    doc.moveDown(2);
+
+    doc.fontSize(20).fillColor('#1e293b').font('Helvetica-Bold').text('Academic Performance Report');
+    doc.fontSize(10).fillColor('#64748b').font('Helvetica').text(`Generated on: ${new Date().toLocaleString()}`);
     doc.moveDown();
 
-    // KPI Summary
+    doc.rect(40, doc.y, 520, 2).fill('#e2e8f0');
+    doc.moveDown();
+
+    // Student Info
+    doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Student Information');
+    doc.fontSize(11).fillColor('#333').font('Helvetica');
+    doc.text(`Name: ${user?.name || studentId}`);
+    doc.text(`Student ID: ${studentId}`);
+    doc.text(`Department: ${user?.department || 'N/A'}`);
+    doc.moveDown();
+
+    // Academic Stats
     if (insight) {
-      doc.fontSize(14).fillColor('#6366F1').text('Academic Overview');
+      doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Academic Summary');
       doc.fontSize(11).fillColor('#333');
-      doc.text(`CGPA: ${insight.cgpa || 'N/A'} / 10.0`);
-      doc.text(`Class Rank: #${insight.classRank || 'N/A'}`);
-      doc.text(`Risk Level: ${insight.riskLevel}`);
-      doc.text(`Risk Reason: ${insight.riskReason}`);
+      doc.text(`Current CGPA: ${insight.cgpa || 'N/A'}`);
+      doc.text(`Risk Level: ${insight.riskLevel || 'LOW'}`);
+      doc.text(`Class Rank: ${insight.classRank ? `#${insight.classRank}` : 'N/A'}`);
       doc.moveDown();
     }
 
-    // Marks Table
-    doc.fontSize(14).fillColor('#6366F1').text('Subject Marks');
-    doc.fontSize(10).fillColor('#333');
-    for (const m of marks) {
-      const total = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);
-      doc.text(`${m.subject}: UT1=${m.scores.ut1 || 0} MidSem=${m.scores.midSem || 0} UT2=${m.scores.ut2 || 0} EndSem=${m.scores.endSem || 0} | Total: ${total}/160`);
-    }
-    doc.moveDown();
-
     // Attendance
-    doc.fontSize(14).fillColor('#6366F1').text('Attendance Summary');
+    doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Attendance Statistics');
     doc.fontSize(10).fillColor('#333');
     for (const a of attendance) {
-      doc.text(`${a.subject}: ${a.attended}/${a.total} classes (${a.percentage}%) — ${a.percentage >= 75 ? 'OK' : 'LOW'}`);
+      doc.text(`${a.subject}: ${a.percentage}% (${a.attended}/${a.total} classes)`);
     }
     doc.moveDown();
 
-    // Recommendations
-    if (insight?.recommendations?.length) {
-      doc.fontSize(14).fillColor('#6366F1').text('AI Recommendations');
-      doc.fontSize(10).fillColor('#333');
-      for (const rec of insight.recommendations) {
-        doc.text(`[${rec.priority}] ${rec.title}: ${rec.description}`);
-      }
-    }
+    // Footer
+    doc.fontSize(8).fillColor('#94a3b8').text('This is an AI-generated academic report. For official purposes, please consult the university registrar.', { align: 'center', bottom: 40 });
 
     doc.end();
   } catch (err) {
     console.error('[PDF] Student report error:', err);
-    res.status(500).json({ error: 'PDF generation failed' });
+    // If headers haven't been sent, we can send a JSON error
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate PDF report' });
+    } else {
+      // If stream is already piping, we just end it
+      if (doc) doc.end();
+      res.end();
+    }
   }
 };
 

@@ -31,7 +31,7 @@ export default function StudentLayout({ children }) {
   if (!verified) return null;
 
   return (
-    <div className="dashboard-layout" style={{ position: 'relative' }}>
+    <div key={`student-portal-main`} className="dashboard-layout" style={{ position: 'relative' }}>
       <StudentThreeBackground />
       {/* Mesh gradient overlay */}
       <div style={{ 

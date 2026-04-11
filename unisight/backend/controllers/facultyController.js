@@ -121,56 +121,55 @@ export const getMyClasses = async (req, res) => {
           { classId: 'IT_SEM4_2024', department: 'IT', semester: 4, studentCount: 10, atRiskCount: 2, uploadedAt: new Date(), status: 'complete' },
         ]
       });
-    }
-    const logs = await UploadLog.find({ facultyId: req.user.userId })
-      .sort({ createdAt: -1 });
-
-    // If faculty has uploaded CSVs, use those
-    if (logs.length > 0) {
-      const classes = logs.map(log => ({
-        classId: log.classId,
-        department: log.department,
-        semester: log.semester,
-        studentCount: log.studentCount,
-        atRiskCount: log.pendingAlerts?.length || 0,
-        uploadedAt: log.createdAt,
-        status: log.status,
-      }));
-      return res.json({ classes });
-    }
-
-    // Fallback: show classes from Insight collection (seeded data)
-    const facultyUser = await User.findById(req.user.userId).select('department');
+    }    const facultyUser = await User.findById(req.user.userId).select('department');
     const dept = facultyUser?.department;
 
-    const allInsights = await Insight.find(dept ? { department: dept } : {})
-      .select('classId department semester studentId');
+    // Aggregate unique classes from both logs and existing student data
+    const logs = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).lean();
+    const insights = await Insight.find(dept ? { department: dept } : {}).lean();
 
-    // Group by classId
     const classMap = {};
-    for (const ins of allInsights) {
-      if (!ins.classId) continue;
-      if (!classMap[ins.classId]) {
-        classMap[ins.classId] = {
-          classId: ins.classId,
-          department: ins.department,
-          semester: ins.semester || 1,
+
+    // 1. Process seeded/existing data first
+    for (const ins of insights) {
+      const cid = ins.classId;
+      if (!cid) continue;
+      if (!classMap[cid]) {
+        classMap[cid] = {
+          classId: cid,
+          department: ins.department || dept,
+          semester: ins.semester || 4,
           studentCount: 0,
           atRiskCount: 0,
-          uploadedAt: new Date(),
+          uploadedAt: ins.createdAt,
           status: 'complete',
         };
       }
-      classMap[ins.classId].studentCount++;
+      classMap[cid].studentCount++;
+      if (ins.riskLevel && ins.riskLevel !== 'LOW') classMap[cid].atRiskCount++;
     }
 
-    // Count at-risk per class
-    const atRiskInsights = await Insight.find(dept ? { department: dept, riskLevel: { $ne: 'LOW' } } : { riskLevel: { $ne: 'LOW' } });
-    for (const ins of atRiskInsights) {
-      if (classMap[ins.classId]) classMap[ins.classId].atRiskCount++;
+    // 2. Overlay log data for most recent status
+    for (const log of logs) {
+      if (!classMap[log.classId]) {
+        classMap[log.classId] = {
+          classId: log.classId,
+          department: log.department,
+          semester: log.semester || 4,
+          studentCount: log.studentCount || 0,
+          atRiskCount: log.pendingAlerts?.length || 0,
+          uploadedAt: log.createdAt,
+          status: log.status,
+        };
+      } else {
+        // Update with log info if log is more recent or has specific status
+        classMap[log.classId].status = log.status;
+        if (log.studentCount > 0) classMap[log.classId].studentCount = log.studentCount;
+      }
     }
 
-    const classes = Object.values(classMap);
+    const classes = Object.values(classMap).sort((a,b) => b.uploadedAt - a.uploadedAt);
+    res.json({ classes });
     res.json({ classes });
   } catch (err) {
     console.error('[GetMyClasses]', err);
@@ -321,7 +320,7 @@ export const getClassSummary = async (req, res) => {
       subject: m.subject,
       score: (m.scores?.ut1 || 0) + (m.scores?.midSem || 0) + (m.scores?.ut2 || 0) + (m.scores?.endSem || 0),
     }));
-    const narrative = `Class ${classId} has ${atRiskCount} at-risk students out of ${totalStudents}.`;
+    const narrative = `Class ${classId} has ${atRiskCount} at-risk students out of ${totalStudents}. ${atRiskCount > 0 ? 'Performance review recommended for flagged students.' : 'Class performance is stable.'}`;
     res.json({
       students,
       heatmap,
@@ -552,10 +551,39 @@ Start with: "Here is your class summary."
 export const getFacultyEffectiveness = async (req, res) => {
   try {
     const facultyId = req.user.userId;
-    const insights = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 }).limit(10);
+    const facultyUser = await User.findById(facultyId).select('department');
     
-    const history = insights.map((ins, idx) => ({
-      period: `Period ${idx + 1}`,
+    // 1. Get current performance from Insight & Marks for their department/classes
+    const dept = facultyUser?.department;
+    const insights = await Insight.find(dept ? { department: dept } : {});
+    const classes = [...new Set(insights.map(i => i.classId))];
+
+    // 2. Generate or fetch insights
+    let scores = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 });
+
+    if (scores.length === 0 && insights.length > 0) {
+       // Create an initial dynamic insight if none exists
+       const total = insights.length;
+       const atRisk = insights.filter(i => i.riskLevel !== 'LOW').length;
+       const passRate = insights.length ? Math.round(insights.filter(i => (i.cgpa || 0) >= 4).length / total * 100) : 0;
+       const baseScore = Math.min(100, Math.max(0, passRate - (atRisk/total * 50) + 20));
+
+       const first = await TeacherInsight.create({
+         facultyId,
+         classId: classes[0] || 'GENERAL',
+         department: dept || 'N/A',
+         semester: 4,
+         effectivenessScore: Math.round(baseScore),
+         classPassRate: passRate,
+         studentCount: total,
+         effectivenessSummary: `Based on current class performance with a ${passRate}% pass rate.`,
+         scoreChangeVsPrevSem: 0
+       });
+       scores = [first];
+    }
+    
+    const history = scores.map((ins, idx) => ({
+      period: ins.createdAt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
       score: ins.effectivenessScore || 0,
       badge: ins.effectivenessScore >= 85 ? 'Excellent' : ins.effectivenessScore >= 70 ? 'Good' : 'Developing',
       studentPassRate: ins.classPassRate || 0,
@@ -563,7 +591,7 @@ export const getFacultyEffectiveness = async (req, res) => {
       studentCount: ins.studentCount || 0
     }));
     
-    const latest = insights[insights.length - 1];
+    const latest = scores[scores.length - 1];
     const overall = latest ? {
       score: latest.effectivenessScore || 0,
       badge: latest.effectivenessScore >= 85 ? 'Excellent' : latest.effectivenessScore >= 70 ? 'Good' : 'Developing',

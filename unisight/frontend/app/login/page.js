@@ -111,20 +111,15 @@ export default function LoginPage() {
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
           style={{ textAlign: 'center', marginBottom: 36 }}
         >
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, marginBottom: 8, justifyContent: 'center', width: '100%' }}>
             <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-              style={{
-                width: 48, height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, fontWeight: 800, color: 'white',
-                background: gradient,
-                boxShadow: `0 8px 32px ${accent}50, inset 0 2px 8px rgba(255,255,255,0.2)`,
-                border: '2px solid rgba(255,255,255,0.15)',
-                transition: 'background 0.5s, box-shadow 0.5s',
-              }}
-            >S</motion.div>
-            <span style={{ fontSize: 24, fontWeight: 800, color: 'white', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>
+              initial={{ rotate: -10, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              style={{ width: 56, height: 56, flexShrink: 0, position: 'relative' }}
+            >
+              <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </motion.div>
+            <span style={{ fontSize: 26, fontWeight: 800, color: 'white', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.03em', textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
               SUTATE AI
             </span>
           </div>

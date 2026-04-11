@@ -410,6 +410,7 @@ export const getQueryHistory = async (req, res) => {
 
 // GET /api/admin/report/pdf
 export const downloadExecutiveReport = async (req, res) => {
+  let doc;
   try {
     const totalStudents = await User.countDocuments({ role: 'student' });
     const insights = await Insight.find();
@@ -418,14 +419,21 @@ export const downloadExecutiveReport = async (req, res) => {
     const scores = allMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
     const passPercent = scores.length ? Math.round(scores.filter(s=>s>=40).length/scores.length*100) : 0;
 
-    const doc = new PDFDocument({ margin: 40 });
+    doc = new PDFDocument({ margin: 40, size: 'A4' });
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="executive-report.pdf"');
+    res.setHeader('Content-Disposition', 'attachment; filename="UniSight_Executive_Report.pdf"');
     doc.pipe(res);
 
-    doc.fontSize(22).fillColor('#6366f1').font('Helvetica-Bold').text('SUTATE AI — Executive Report', { align: 'center' });
-    doc.fontSize(11).fillColor('#666').font('Helvetica').text(`University Academic Performance Overview`, { align: 'center' });
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'center' });
+    doc.fontSize(24).fillColor('#6366F1').font('Helvetica-Bold').text('SUTATE AI', { align: 'right' });
+    doc.fontSize(10).fillColor('#64748b').text('Executive Administration Panel', { align: 'right' });
+    doc.moveDown(2);
+
+    doc.fontSize(20).fillColor('#1e293b').font('Helvetica-Bold').text('Executive Academic Report');
+    doc.fontSize(10).fillColor('#64748b').text(`Period: Spring 2024 | Generated: ${new Date().toLocaleDateString()}`);
+    doc.moveDown();
+
+    doc.rect(40, doc.y, 520, 2).fill('#e2e8f0');
     doc.moveDown();
 
     doc.fontSize(14).fillColor('#6366f1').font('Helvetica-Bold').text('Key Performance Indicators');
@@ -435,16 +443,22 @@ export const downloadExecutiveReport = async (req, res) => {
     doc.text(`Students At Risk (HIGH+MEDIUM): ${atRiskCount}`);
     doc.moveDown();
 
-    doc.fontSize(14).fillColor('#D97706').text('Top At-Risk Students');
-    const topRisk = insights.filter(i => i.riskLevel === 'HIGH').slice(0,10);
+    doc.fontSize(14).fillColor('#f59e0b').font('Helvetica-Bold').text('Top At-Risk Students');
+    const topRisk = insights.filter(i => i.riskLevel === 'HIGH').slice(0, 10);
     doc.fontSize(10).fillColor('#333');
     for (const i of topRisk) {
-      doc.text(`[HIGH] ${i.studentId} (${i.department}): ${i.riskReason}`);
+      doc.text(`- Student ID: ${i.studentId} | Dept: ${i.department} | Reason: ${i.riskReason}`);
     }
 
     doc.end();
   } catch (err) {
-    res.status(500).json({ error: 'PDF generation failed' });
+    console.error('[PDF] Executive report error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'PDF generation failed' });
+    } else {
+      if (doc) doc.end();
+      res.end();
+    }
   }
 };
 
@@ -937,61 +951,45 @@ export const getFacultyEffectivenessLeaderboard = async (req, res) => {
 
 // GET /api/admin/naac-export
 export const exportNaac = async (req, res) => {
+  let doc;
   try {
-    const doc = new PDFDocument({ margin: 40 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="NAAC-2024-Export.pdf"');
-    doc.pipe(res);
-
-    // Header
-    doc.fontSize(22).fillColor('#10b981').font('Helvetica-Bold').text('NAAC 2024 — Annual Quality Assurance Report', { align: 'center' });
-    doc.fontSize(10).fillColor('#666').font('Helvetica').text('Criterion 2: Teaching-Learning and Evaluation', { align: 'center' });
-    doc.text(`University-wide Automation Export | ${new Date().toLocaleDateString()}`, { align: 'center' });
-    doc.moveDown(2);
-
-    // Summary Section
     const totalStudents = await User.countDocuments({ role: 'student' });
     const allInsights = await Insight.find();
     const passRate = allInsights.length ? Math.round(allInsights.filter(i => (i.cgpa*20) >= 40).length / allInsights.length * 100) : 0;
 
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('1. Institutional Academic Performance (2.6.2)');
-    doc.fontSize(11).fillColor('#4b5563').font('Helvetica').text(`- Total Student Strength: ${totalStudents}`);
-    doc.text(`- Annual Average Pass Percentage of Students: ${passRate}%`);
+    doc = new PDFDocument({ margin: 40, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="NAAC_Audit_Export_2024.pdf"');
+    doc.pipe(res);
+
+    doc.fontSize(22).fillColor('#10b981').font('Helvetica-Bold').text('NAAC 2024 Quality Audit', { align: 'center' });
+    doc.fontSize(10).fillColor('#666').font('Helvetica').text('Criterion 2: Teaching-Learning and Evaluation', { align: 'center' });
     doc.moveDown();
 
-    // Departmental Performance Breakdown
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('2. Department-wise Performance (2.6.3)');
+    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('1. Institutional Performance Summary');
+    doc.fontSize(11).fillColor('#4b5563').font('Helvetica').text(`- Total Student Strength: ${totalStudents}`);
+    doc.text(`- Annual Average Pass Percentage: ${passRate}%`);
+    doc.moveDown();
+
+    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('2. Departmental Breakdown');
     const depts = ['CSE', 'IT', 'Mech', 'Civil'];
     for (const d of depts) {
       const deptMarks = await Marks.find({ department: d });
       const deptScores = deptMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
       const avg = deptScores.length ? Math.round(deptScores.reduce((a,b)=>a+b,0)/deptScores.length*100/160) : 0;
-      doc.fontSize(11).fillColor('#4b5563').text(`- ${d}: Average Student Score Index: ${avg}%`);
+      doc.fontSize(11).fillColor('#4b5563').text(`- ${d}: Performance Index: ${avg}%`);
     }
-    doc.moveDown();
-
-    // Teacher Effectiveness Tracking
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('3. Teacher Effectiveness Index (2.4.2)');
-    const tInsights = await TeacherInsight.find().lean();
-    const avgEffectiveness = tInsights.length ? Math.round(tInsights.reduce((a,b)=>a+(b.effectivenessScore||0),0)/tInsights.length) : 0;
-    doc.fontSize(11).fillColor('#4b5563').text(`- Institutional Teacher Effectiveness Mean: ${avgEffectiveness}/100`);
-    doc.text(`- Performance-based improvements suggested: ${tInsights.filter(t => (t.scoreChangeVsPrevSem||0) > 0).length} faculty members`);
-    doc.moveDown();
-
-    // Student Wellbeing & Diversity
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('4. Student Performance & Learning Outcomes (2.6.1)');
-    const atRisk = allInsights.filter(i => i.riskLevel === 'HIGH').length;
-    doc.fontSize(11).fillColor('#4b5563').text(`- Proactive Retention: ${atRisk} students identified for remedial coaching (Low CGPA/High At-Risk).`);
-    doc.text(`- Automation coverage: 100% of internal assessment marks digitized and analyzed via SUTATE AI.`);
-
-    // Footer
-    doc.moveDown(4);
-    doc.fontSize(8).fillColor('#9ca3af').text('Export generated via UniSight Smart Automation Pipeline. This document fulfills evidence requirements for "Continuous Assessment" and "Incremental Improvements" categories.', { align: 'center' });
 
     doc.end();
   } catch (err) {
-    console.error('[NAAC-Export] Error:', err);
-    res.status(500).json({ error: 'Failed to generate NAAC report' });
+    console.error('[PDF] NAAC Export error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate NAAC PDF' });
+    } else {
+      if (doc) doc.end();
+      res.end();
+    }
   }
 };
 

@@ -288,6 +288,31 @@ async function seed() {
     metadata: { tier: 'MEDIUM' },
   });
   console.log('Sample notifications created');
+  
+  const Poll = (await import('../models/Poll.js')).default;
+  await Poll.deleteMany({});
+  const polls = [
+    { 
+      pollId: 'p1', code: 'A1B2C3', facultyId: faculty1._id, classId: 'CSE-2024-SEM4', department: 'CSE', 
+      question: 'How clear was today\'s session on Memory Management?', isActive: false, 
+      responses: [
+        { studentId: 'S001', rating: 5 }, { studentId: 'S002', rating: 4 }, { studentId: 'S003', rating: 5 },
+        { studentId: 'S004', rating: 3 }, { studentId: 'S005', rating: 4 }
+      ],
+      closedAt: new Date(Date.now() - 86400000)
+    },
+    { 
+      pollId: 'p2', code: 'D4E5F6', facultyId: faculty1._id, classId: 'CSE-2024-SEM4', department: 'CSE', 
+      question: 'Rate your understanding of Page Replacement Algorithms', isActive: false, 
+      responses: [
+        { studentId: 'S001', rating: 4 }, { studentId: 'S002', rating: 5 }, { studentId: 'S003', rating: 4 },
+        { studentId: 'S004', rating: 5 }, { studentId: 'S005', rating: 5 }, { studentId: 'S006', rating: 4 }
+      ],
+      closedAt: new Date(Date.now() - 172800000)
+    }
+  ];
+  await Poll.insertMany(polls);
+  console.log('Sample polls seeded');
 
   console.log('SEEDING COMPLETE');
   await mongoose.disconnect();

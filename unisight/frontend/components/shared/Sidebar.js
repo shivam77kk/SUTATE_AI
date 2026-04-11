@@ -78,36 +78,29 @@ export default function Sidebar() {
       style={{ flexShrink: 0 }}
     >
       {/* Logo */}
-      <div style={{ padding: '8px 0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 6px' }}>
-          <motion.div 
-            whileHover={{ scale: 1.05, rotate: 5 }}
-            style={{
-              width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-              background: theme.gradient,
-              boxShadow: `0 4px 18px ${theme.glow}, inset 0 1px 0 rgba(255,255,255,0.2)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 18, fontWeight: 800, color: 'white',
-              border: '1px solid rgba(255,255,255,0.15)',
-            }}
-          >S</motion.div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }} 
-                animate={{ opacity: 1, x: 0 }} 
-                exit={{ opacity: 0, x: -10 }}
-                style={{ overflow: 'hidden' }}
-              >
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: 'white', letterSpacing: '-0.01em' }}>SUTATE AI</div>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {user ? theme.label : 'Connecting...'}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+          <Link href={`/${role}/dashboard`} style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 24, padding: '0 4px' }}>
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              style={{ width: 34, height: 34, flexShrink: 0, position: 'relative' }}
+            >
+              <img src="/logo.png" alt="SUTATE AI" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </motion.div>
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }} 
+                  animate={{ opacity: 1, x: 0 }} 
+                  exit={{ opacity: 0, x: -10 }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 15, color: 'white', letterSpacing: '-0.02em', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>SUTATE AI</div>
+                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {user ? theme.label : 'Connecting...'}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Link>
 
       {/* User info */}
       <AnimatePresence>

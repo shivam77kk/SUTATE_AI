@@ -1,5 +1,6 @@
 import HelpRequest from '../models/HelpRequest.js';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 
 export const submitRequest = async (req, res) => {
   try {
@@ -16,6 +17,39 @@ export const submitRequest = async (req, res) => {
       urgency,
       status: 'pending',
     });
+
+    // Notify Faculty of the department and all Admins
+    const staffToNotify = await User.find({
+      $or: [
+        { role: 'faculty', department: req.user.department },
+        { role: 'admin' }
+      ]
+    }).select('_id');
+
+    if (staffToNotify.length > 0) {
+      const notifications = staffToNotify.map(staff => ({
+        userId: staff._id,
+        type: 'alert',
+        title: `New Help Request: ${subject}`,
+        message: `${req.user.name} (${req.user.department}) submitted a ${urgency} help request.`,
+        isRead: false,
+        metadata: { requestId: request._id.toString(), type: 'help_request' }
+      }));
+      
+      await Notification.insertMany(notifications);
+
+      // Emit real-time events to staff rooms
+      req.io?.to(`faculty-${req.user.department}`).emit('notification:new', {
+        title: 'New Help Request',
+        message: `${req.user.name} needs assistance with ${subject}`,
+        urgency
+      });
+      req.io?.to('admin-room').emit('notification:new', {
+        title: 'New Student Request',
+        message: `[${req.user.department}] ${req.user.name}: ${subject}`,
+        urgency
+      });
+    }
 
     res.status(201).json({ message: 'Help request submitted', helpRequestId: request._id });
   } catch (err) {

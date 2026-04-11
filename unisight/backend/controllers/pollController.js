@@ -121,17 +121,20 @@ export const getPollResults = async (req, res) => {
   }
 };
 
-// GET /api/polls/my — Faculty: get all their polls with results
 export const getMyPolls = async (req, res) => {
   try {
-    const polls = await Poll.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).limit(20);
+    const facultyId = req.user.userId;
+    const polls = await Poll.find({ facultyId }).sort({ createdAt: -1 }).limit(30);
     
     const formatted = polls.map(poll => {
       const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-      poll.responses.forEach(r => distribution[r.rating]++);
+      poll.responses.forEach(r => {
+        if (distribution[r.rating] !== undefined) distribution[r.rating]++;
+      });
       const avgRating = poll.responses.length 
-        ? (poll.responses.reduce((s, r) => s + r.rating, 0) / poll.responses.length).toFixed(1) 
+        ? (poll.responses.reduce((s, r) => s + (r.rating || 0), 0) / poll.responses.length)
         : null;
+
       return {
         pollId: poll.pollId,
         question: poll.question,
@@ -139,7 +142,7 @@ export const getMyPolls = async (req, res) => {
         className: poll.classId,
         isActive: poll.isActive,
         totalResponses: poll.responses.length,
-        avgRating: avgRating ? parseFloat(avgRating) : null,
+        avgRating: avgRating ? parseFloat(avgRating.toFixed(1)) : null,
         distribution,
         createdAt: poll.createdAt,
         closedAt: poll.closedAt,
@@ -148,7 +151,37 @@ export const getMyPolls = async (req, res) => {
     
     res.json({ polls: formatted });
   } catch (err) {
-    console.error('[GetMyPolls]', err);
+    console.error('[GetMyPolls] Error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getPollResultsByClass = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const poll = await Poll.findOne({ classId }).sort({ createdAt: -1 });
+    if (!poll) return res.status(404).json({ error: 'No polls found for this class' });
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    poll.responses.forEach(r => distribution[r.rating]++);
+    const avgRating = poll.responses.length ? (poll.responses.reduce((s, r) => s + r.rating, 0) / poll.responses.length).toFixed(1) : 0;
+    
+    const chartData = Object.keys(distribution).map(rating => ({
+      rating: `Rating ${rating}`,
+      count: distribution[rating]
+    }));
+
+    res.json({
+      pollId: poll.pollId,
+      question: poll.question,
+      isActive: poll.isActive,
+      totalResponses: poll.responses.length,
+      avgRating: parseFloat(avgRating),
+      distribution: chartData,
+      createdAt: poll.createdAt
+    });
+  } catch (err) {
+    console.error('[GetPollResultsByClass] Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
