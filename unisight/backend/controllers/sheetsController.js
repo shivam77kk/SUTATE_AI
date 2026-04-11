@@ -34,8 +34,10 @@ export const saveSheetConfig = async (req, res) => {
       return res.status(400).json({ error: `Cannot access sheet: ${fetchErr.message}. Make sure it is public.` });
     }
 
+    const configQuery = req.user.role === 'admin' ? {} : { facultyId: req.user.userId };
+    
     await SheetsConfig.findOneAndUpdate(
-      { facultyId: req.user.userId },
+      configQuery,
       { facultyId: req.user.userId, sheetUrl, csvFetchUrl, classId, department, semester: parseInt(semester), isActive: true, lastSyncStatus: 'never' },
       { upsert: true, new: true }
     );
@@ -47,20 +49,23 @@ export const saveSheetConfig = async (req, res) => {
 };
 
 export const getSheetConfig = async (req, res) => {
-  const config = await SheetsConfig.findOne({ facultyId: req.user.userId });
+  const query = req.user.role === 'admin' ? { isActive: true } : { facultyId: req.user.userId };
+  const config = await SheetsConfig.findOne(query).sort({ updatedAt: -1 });
   res.json({ config });
 };
 
 export const removeSheetConfig = async (req, res) => {
-  await SheetsConfig.findOneAndUpdate({ facultyId: req.user.userId }, { isActive: false });
+  const query = req.user.role === 'admin' ? { isActive: true } : { facultyId: req.user.userId };
+  await SheetsConfig.findOneAndUpdate(query, { isActive: false });
   res.json({ message: 'Auto-sync disabled' });
 };
 
 export const manualSync = async (req, res) => {
   try {
-    const config = await SheetsConfig.findOne({ facultyId: req.user.userId, isActive: true });
+    const query = req.user.role === 'admin' ? { isActive: true } : { facultyId: req.user.userId, isActive: true };
+    const config = await SheetsConfig.findOne(query);
     if (!config) return res.status(404).json({ error: 'No active sheet config' });
-    const result = await syncSheetForFaculty(config, req.user.userId);
+    const result = await syncSheetForFaculty(config, config.facultyId);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: `Sync failed: ${err.message}` });

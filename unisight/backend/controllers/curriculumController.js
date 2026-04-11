@@ -43,16 +43,23 @@ export const getCurriculum = async (_req, res) => {
       { $sort: { failureRate: -1 } },
     ]);
 
-    const flags = subjects.map((s) => ({
-      subject: s.subject,
-      department: s.department,
-      severity: s.failureRate > 40 ? 'high' : s.failureRate > 25 ? 'medium' : 'low',
-      issue: `${s.subject} shows a ${Math.round(s.failureRate)}% failure rate with an average score of ${s.avgScore}.`,
-      recommendation: s.failureRate > 40 ? 'Immediate curriculum review required' : 'Monitor and provide additional support',
-      failureRate: Math.round(s.failureRate),
-      avgScore: s.avgScore,
-      totalStudents: s.total,
-    }));
+    const aiFlags = await CurriculumFlag.find({}).lean();
+
+    const flags = subjects.map((s) => {
+      const aiMatch = aiFlags.find(f => f.subject === s.subject && f.department === s.department);
+      const severity = s.failureRate > 20 ? 'high' : s.failureRate > 10 ? 'medium' : 'low';
+      
+      return {
+        subject: s.subject,
+        department: s.department,
+        severity,
+        issue: aiMatch?.aiAnalysis || `${s.subject} shows a ${Math.round(s.failureRate)}% failure rate with an average score of ${s.avgScore}.`,
+        recommendation: aiMatch?.recommendedActions?.[0] || (s.failureRate > 20 ? 'Immediate curriculum review required' : 'Monitor and provide additional support'),
+        failureRate: Math.round(s.failureRate),
+        avgScore: s.avgScore,
+        totalStudents: s.total,
+      };
+    });
 
     const summary = flags.length > 0 
       ? `Analysis complete: ${flags.filter(f => f.severity === 'high').length} high-priority subjects need immediate attention.`
@@ -117,12 +124,29 @@ export const analyseCurriculum = async (_req, res) => {
       analysis = fallback;
     }
 
-    const summary = `Analysis complete: ${(analysis || []).filter(a => a.severity === 'high').length} high-priority subjects identified.`;
+    const analysisResults = analysis || fallback;
+    
+    // Persist results to CurriculumFlag so they show up in getCurriculum
+    for (const resItem of analysisResults) {
+      await CurriculumFlag.findOneAndUpdate(
+        { subject: resItem.subject, department: resItem.department },
+        { 
+          ...resItem,
+          flagSeverity: resItem.severity === 'high' ? 'critical' : (resItem.severity === 'medium' ? 'concern' : 'watch'),
+          aiAnalysis: resItem.issue,
+          recommendedActions: [resItem.recommendation],
+          lastUpdated: new Date()
+        },
+        { upsert: true }
+      );
+    }
+
+    const summary = `Analysis complete: ${(analysisResults || []).filter(a => a.severity === 'high').length} high-priority subjects identified and persisted.`;
 
     res.json({ 
-      flags: analysis || fallback,
+      flags: analysisResults,
       summary,
-      analysis: { analysed: subjects.length, flagged: (analysis || fallback).length }
+      analysis: { analysed: subjects.length, flagged: (analysisResults).length }
     });
   } catch (err) {
     console.error('[Curriculum] Analysis error:', err);

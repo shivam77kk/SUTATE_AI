@@ -233,13 +233,16 @@ export default function LoginPage() {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   style={{ 
-                    position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
                     background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b',
-                    width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: 8,
+                    width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 10,
+                    transition: 'color 0.2s',
                   }}
+                  onMouseOver={e => e.currentTarget.style.color = accent}
+                  onMouseOut={e => e.currentTarget.style.color = '#64748b'}
                 >
-                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPw ? <EyeOff size={20} strokeWidth={1.5} /> : <Eye size={20} strokeWidth={1.5} />}
                 </motion.button>
               </div>
               {error && (

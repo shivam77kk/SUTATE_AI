@@ -151,15 +151,45 @@ export const getAdminReportData = async (req, res) => {
   try {
     const totalStudents = await User.countDocuments({ role: 'student' });
     const totalFaculty = await User.countDocuments({ role: 'faculty' });
+    const depts = await User.distinct('department');
+    const insights = await Insight.find().lean();
     const atRiskCritical = await Insight.countDocuments({ riskLevel: 'CRITICAL' });
     const atRiskHigh = await Insight.countDocuments({ riskLevel: 'HIGH' });
     const atRiskMedium = await Insight.countDocuments({ riskLevel: 'MEDIUM' });
+    
+    // Calculate performance metrics
+    const overallCgpa = insights.length ? insights.reduce((a, b) => a + (b.cgpa || 0), 0) / insights.length : 0;
+    const allAttendance = await Attendance.find().select('percentage').lean();
+    const overallAttendance = allAttendance.length ? allAttendance.reduce((a, b) => a + b.percentage, 0) / allAttendance.length : 0;
+    
+    const allMarks = await Marks.find().lean();
+    const passRate = allMarks.length ? (allMarks.filter(m => {
+      const sum = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);
+      return sum >= 40;
+    }).length / allMarks.length) * 100 : 0;
+
+    // Interventions summary (simulated from risk levels for now)
+    const interventionsTotal = insights.filter(i => i.riskLevel !== 'LOW').length;
+    const interventionsSuccessful = Math.floor(interventionsTotal * 0.7);
+    const interventionsPending = interventionsTotal - interventionsSuccessful;
 
     res.json({
-      enrolment: { totalStudents, totalFaculty, departments: 8 },
-      performance: { avgCgpa: 7.8, passRate: 85, attendance: 89 },
-      atRisk: { critical: atRiskCritical || 45, high: atRiskHigh || 120, medium: atRiskMedium || 300 },
-      interventions: { total: 450, successful: 300, pending: 50 },
+      enrolment: { totalStudents, totalFaculty, departments: depts.length || 1 },
+      performance: { 
+        avgCgpa: parseFloat(overallCgpa.toFixed(2)), 
+        passRate: Math.round(passRate), 
+        attendance: Math.round(overallAttendance) 
+      },
+      atRisk: { 
+        critical: atRiskCritical, 
+        high: atRiskHigh, 
+        medium: atRiskMedium 
+      },
+      interventions: { 
+        total: interventionsTotal, 
+        successful: interventionsSuccessful, 
+        pending: interventionsPending 
+      },
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -256,6 +286,8 @@ export const naturalLanguageQuery = async (req, res) => {
     }
     const prompt = `
 You are a SUTATE AI data engineer. Convert English questions about university data into valid MongoDB aggregation queries.
+Current Server Time: ${new Date().toISOString()}
+Random Session Seed: ${crypto.randomBytes(4).toString('hex')}
 
 Available collections:
 - users: { name, email, role, department, studentId }
@@ -270,6 +302,7 @@ RULES:
 2. NO comments (// or /*) inside JSON.
 3. NO trailing commas.
 4. If results require a chart, use chartType: "bar", "line", or "pie".
+5. In the "answer" field, provide a dynamic, descriptive summary (2-3 sentences) that directly mentions some specific stats found.
 
 Response Format:
 {
@@ -286,20 +319,28 @@ Response Format:
     let aiResult;
     try {
       aiResult = await callGeminiJSON(prompt, {
-        collection: 'insights',
-        pipeline: [
-          { $group: { _id: '$dropoutTier', value: { $sum: 1 } } },
-          { $sort: { value: -1 } },
-        ],
+        temperature: 0.7,
+        maxTokens: 1000,
+      });
+      
+      if (!aiResult || !aiResult.pipeline) {
+        throw new Error('AI could not generate a valid pipeline');
+      }
+    } catch (err) {
+      console.warn('[Admin/ask] Gemini error or bad format, using intelligent fallback:', err.message);
+      // Dynamic fallback based on question keywords
+      const isRisk = /risk|drop|fail/i.test(question);
+      aiResult = {
+        collection: isRisk ? 'insights' : 'marks',
+        pipeline: isRisk 
+          ? [ { $group: { _id: '$riskLevel', value: { $sum: 1 } } }, { $sort: { value: -1 } } ]
+          : [ { $group: { _id: '$department', value: { $avg: '$cgpa' } } } ],
         chartType: 'bar',
         xKey: '_id',
         yKey: 'value',
-        title: 'Risk distribution',
-        answer: 'Here is the current distribution of at-risk students by tier.',
-      });
-    } catch (err) {
-      console.error('[Admin/ask] Gemini error:', err);
-      return res.status(500).json({ error: 'AI query failed: ' + err.message });
+        title: isRisk ? 'Current Risk Profile' : 'Departmental Average',
+        answer: `I had trouble generating a custom query for "${question}", so I've retrieved a general overview of ${isRisk ? 'at-risk students' : 'academic performance'} across departments for you.`,
+      };
     }
 
     // Validate pipeline — only allow safe operators
