@@ -24,7 +24,7 @@ export default function StudentProfilePage() {
 
   const { data: longitudinal } = useQuery({
     queryKey: ['faculty-student-longitudinal', id],
-    queryFn: () => api.get(`/student/longitudinal`).then(r => r.data).catch(() => null),
+    queryFn: () => api.get(`/faculty/student/${id}/longitudinal`).then(r => r.data).catch(() => null),
   });
 
   if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;

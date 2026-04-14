@@ -271,6 +271,35 @@ async function seed() {
   });
   console.log('Upload logs created');
 
+  const sampleAlerts = [
+    { studentId: 'S007', studentEmail: 'pooja.nair@student.edu', facultyId: faculty1._id, emailSubject: 'Academic Performance Concern', emailBody: 'Body...', sentAt: new Date(Date.now() - 3 * 86400000) },
+    { studentId: 'S008', studentEmail: 'dev.sharma@student.edu', facultyId: faculty1._id, emailSubject: 'Low Attendance Alert', emailBody: 'Body...', sentAt: new Date(Date.now() - 5 * 86400000) },
+    { studentId: 'T007', studentEmail: 'mohit.saxena@student.edu', facultyId: faculty2._id, emailSubject: 'Mid-Sem Alert', emailBody: 'Body...', sentAt: new Date(Date.now() - 2 * 86400000) },
+  ];
+
+  const createdAlerts = await Alert.insertMany(sampleAlerts);
+  console.log('Sample alerts seeded');
+
+  const sampleInterventions = [
+    { 
+      studentId: 'S007', facultyId: faculty1._id, alertId: createdAlerts[0]._id, classId: 'CSE-2024-SEM4', 
+      riskAtSend: 'HIGH', outcome: 'improved', resolvedAt: new Date() 
+    },
+    { 
+      studentId: 'S008', facultyId: faculty1._id, alertId: createdAlerts[1]._id, classId: 'CSE-2024-SEM4', 
+      riskAtSend: 'HIGH', outcome: 'pending' 
+    },
+    { 
+      studentId: 'T007', facultyId: faculty2._id, alertId: createdAlerts[2]._id, classId: 'IT-2024-SEM4', 
+      riskAtSend: 'MEDIUM', outcome: 'pending' 
+    },
+  ];
+  const InterventionModel = (await import('../models/Intervention.js')).default; // This one is not at top
+  await InterventionModel.insertMany(sampleInterventions);
+  console.log('Sample interventions seeded');
+
+
+
   await Notification.create({
     userId: cseUsers[0]._id,
     type: 'marks_uploaded',

@@ -23,7 +23,10 @@ api.interceptors.response.use(
       }
     }
     if (err.response?.data?.error) {
-      toast.error(err.response.data.error);
+      const errorMsg = err.response.data.error;
+      if (!(err.response?.status === 401 && (errorMsg === 'Invalid or expired token' || errorMsg === 'Authentication required' || errorMsg === 'User not found'))) {
+        toast.error(errorMsg);
+      }
     }
     return Promise.reject(err);
   }

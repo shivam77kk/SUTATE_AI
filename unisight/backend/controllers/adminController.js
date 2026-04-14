@@ -67,13 +67,15 @@ export const getOverview = async (req, res) => {
     // Semester trend — aggregate marks by semester
     const semesters = [1,2,3,4];
     const semesterTrend = semesters.map(sem => {
-      const row = { semester: sem };
-      for (const dept of departments) {
-        const deptSemMarks = allMarks.filter(m => m.department === dept && m.semester === sem);
-        const semScores = deptSemMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-        row[dept] = semScores.length ? Math.round(semScores.reduce((a,b)=>a+b,0)/semScores.length) : 0;
-      }
-      return row;
+      const semInsights = insights.filter(i => (i.semester || 4) === sem);
+      const avgCgpa = semInsights.length ? semInsights.reduce((a, b) => a + (b.cgpa || 0), 0) / semInsights.length : 0;
+      const avgDropoutScore = semInsights.length ? semInsights.reduce((a, b) => a + (b.dropoutProbabilityScore || 0), 0) / semInsights.length : 0;
+      
+      return { 
+        semester: `Sem ${sem}`, 
+        avgCgpa: parseFloat(avgCgpa.toFixed(2)), 
+        avgDropoutScore: Math.round(avgDropoutScore) 
+      };
     });
 
     const atRiskByTier = insights.reduce((acc, item) => {
@@ -100,9 +102,15 @@ export const getOverview = async (req, res) => {
       return { department: dept, atRiskCount: deptInsights.length };
     });
 
-    // atRiskStudents for the overview table
-    const topAtRisk = insights
-      .filter(i => i.riskLevel !== 'LOW')
+    // deduplicate at-risk students - keep latest insight for each student
+    const studentMap = new Map();
+    insights.filter(i => i.riskLevel !== 'LOW').forEach(ins => {
+      if (!studentMap.has(ins.studentId) || new Date(ins.createdAt) > new Date(studentMap.get(ins.studentId).createdAt)) {
+        studentMap.set(ins.studentId, ins);
+      }
+    });
+
+    const topAtRisk = Array.from(studentMap.values())
       .sort((a, b) => (b.dropoutProbabilityScore || 0) - (a.dropoutProbabilityScore || 0))
       .slice(0, 10);
     const atRiskStudents = await Promise.all(topAtRisk.map(async (insight) => {
@@ -199,15 +207,7 @@ export const getAdminReportData = async (req, res) => {
 // GET /api/admin/top-atrisk
 export const getTopAtRisk = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        students: [
-          { rank: 1, name: 'Pooja Nair', studentId: 'S007', department: 'CSE', riskLevel: 'HIGH', riskReason: 'Attendance < 65%', classId: 'CSE_SEM4_2024', dropoutProbabilityScore: 85, dropoutTier: 'HIGH' },
-          { rank: 2, name: 'Dev Sharma', studentId: 'S008', department: 'CSE', riskLevel: 'HIGH', riskReason: 'Marks declining', classId: 'CSE_SEM4_2024', dropoutProbabilityScore: 82, dropoutTier: 'HIGH' },
-          { rank: 3, name: 'Raj Chowdhury', studentId: 'T004', department: 'IT', riskLevel: 'HIGH', riskReason: 'Low lab marks', classId: 'IT_SEM4_2024', dropoutProbabilityScore: 78, dropoutTier: 'HIGH' },
-        ]
-      });
-    }
+    // real data only
     const highRisk = await Insight.find({ riskLevel: 'HIGH' }).sort({ cgpa: 1 }).limit(10);
     const students = await Promise.all(highRisk.map(async (insight, idx) => {
       const user = await User.findOne({ studentId: insight.studentId }).select('name department');
@@ -232,17 +232,7 @@ export const getTopAtRisk = async (req, res) => {
 // GET /api/admin/trends
 export const getTrends = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        trend: [
-          { semester: 'Sem 1', CSE: 75, IT: 72, Mech: 68, Civil: 65 },
-          { semester: 'Sem 2', CSE: 78, IT: 75, Mech: 70, Civil: 68 },
-          { semester: 'Sem 3', CSE: 82, IT: 78, Mech: 72, Civil: 70 },
-          { semester: 'Sem 4', CSE: 85, IT: 80, Mech: 75, Civil: 72 },
-        ],
-        departments: ['CSE', 'IT', 'Mech', 'Civil']
-      });
-    }
+    // real data only
     const allMarks = await Marks.find();
     const departments = ['CSE','IT','Mech','Civil'];
     const semesters = [1,2,3,4];
@@ -917,34 +907,35 @@ export const getInterventionScores = async (req, res) => {
 
 export const getFacultyEffectivenessLeaderboard = async (req, res) => {
   try {
-    let insights = await TeacherInsight.find().populate('facultyId', 'name department').sort({ effectivenessScore: -1 });
+    const allFaculties = await User.find({ role: 'faculty' }).lean();
+    const insights = await TeacherInsight.find().lean();
     
-    // Fallback if TeacherInsight is unseeded but Faculty users exist
-    if (insights.length === 0) {
-      const faculties = await User.find({ role: 'faculty' });
-      insights = faculties.map(f => ({
-        facultyId: { name: f.name, department: f.department },
-        department: f.department,
-        classId: f.department + '_SEM4',
-        effectivenessScore: Math.floor(Math.random() * 20) + 75, // 75-95
-        classPassRate: Math.floor(Math.random() * 10) + 85, // 85-95
-        scoreChangeVsPrevSem: Math.floor(Math.random() * 5) - 2,
-        teachingRecommendations: ['Increase interactive sessions']
-      }));
-      insights.sort((a,b) => b.effectivenessScore - a.effectivenessScore);
-    }
-
-    const formatted = insights.map(i => ({
-      facultyName: i.facultyId?.name,
-      department: i.department,
-      classId: i.classId,
-      effectivenessScore: i.effectivenessScore,
-      classPassRate: i.classPassRate,
-      scoreChangeVsPrevSem: i.scoreChangeVsPrevSem,
-      teachingRecommendations: i.teachingRecommendations
-    }));
-    res.json({ leaderboard: formatted });
+    const leaderboard = allFaculties.map(faculty => {
+      // Find the best insight for this specific faculty
+      const facultyInsights = insights.filter(i => 
+        i.facultyId?.toString() === faculty._id.toString() || 
+        (!i.facultyId && i.department === faculty.department) // Fallback for legacy/seeded data
+      );
+      
+      const bestInsight = facultyInsights.sort((a, b) => b.effectivenessScore - a.effectivenessScore)[0];
+      
+      return {
+        facultyName: faculty.name,
+        department: faculty.department,
+        classId: bestInsight?.classId || 'N/A',
+        effectivenessScore: bestInsight?.effectivenessScore || 85, // Default score if none found
+        classPassRate: bestInsight?.classPassRate || 80,
+        scoreChangeVsPrevSem: bestInsight?.scoreChangeVsPrevSem || 0,
+        teachingRecommendations: bestInsight?.teachingRecommendations || []
+      };
+    });
+    
+    // Sort by effectiveness score descending
+    leaderboard.sort((a, b) => b.effectivenessScore - a.effectivenessScore);
+    
+    res.json({ leaderboard });
   } catch (err) {
+    console.error('[Leaderboard Error]', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

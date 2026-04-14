@@ -11,14 +11,21 @@ const STATUS_COLORS = { pending: '#f59e0b', in_progress: '#0ea5e9', resolved: '#
 export default function InterventionsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-interventions'],
-    queryFn: () => api.get('/interventions/stats').then(r => r.data).then(stats => ({ stats, interventions: [] })),
+    queryFn: async () => {
+      const [statsRes, listRes] = await Promise.all([
+        api.get('/interventions/stats'),
+        api.get('/interventions')
+      ]);
+      return { stats: statsRes.data, interventions: listRes.data.interventions };
+    },
   });
 
   if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;
 
   const stats = data?.stats || {};
   const interventions = data?.interventions || [];
-  const resolution = stats.resolutionRate || 0;
+  const rawResolution = stats.resolutionRate || 0;
+  const resolution = typeof rawResolution === 'string' ? parseInt(rawResolution.replace('%', ''), 10) : rawResolution;
 
   return (
     <div className="dashboard-content">

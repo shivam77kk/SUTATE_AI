@@ -11,6 +11,7 @@ router.get('/class/:id/summary', fc.getClassSummary);
 router.get('/class/:id/heatmap', fc.getClassHeatmap);
 router.get('/class/:id/report/pdf', fc.downloadClassReport);
 router.get('/student/:id/full-profile', fc.getStudentFullProfile);
+router.get('/student/:id/longitudinal', fc.getStudentLongitudinal);
 router.get('/class/:id/voice-summary', fc.getClassVoiceSummary);
 router.get('/effectiveness', fc.getFacultyEffectiveness);
 export default router;

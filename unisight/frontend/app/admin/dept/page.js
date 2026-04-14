@@ -95,9 +95,13 @@ export default function AdminDeptDrilldown() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                   <XAxis 
                     dataKey="subject" 
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} 
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
                     axisLine={false} 
                     tickLine={false}
+                    interval={0}
+                    height={60}
+                    angle={-15}
+                    textAnchor="end"
                   />
                   <YAxis 
                     tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} 

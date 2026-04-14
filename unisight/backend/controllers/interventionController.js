@@ -43,12 +43,45 @@ export const getInterventionStats = async (req, res) => {
     const all = await Intervention.find(filter).lean();
 
     const total = all.length;
-    const improved = all.filter(i => i.outcome === 'improved').length;
+    const resolved = all.filter(i => i.outcome === 'improved' || i.resolvedAt).length;
     const pending = all.filter(i => i.outcome === 'pending').length;
-    const resolutionRate = total > 0 ? `${Math.round((improved / total) * 100)}%` : '0%';
+    const resolutionRate = total > 0 ? `${Math.round((resolved / total) * 100)}%` : '0%';
 
-    res.json({ total, improved, pending, resolutionRate });
+    res.json({ total, resolved, pending, resolutionRate });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// GET /api/interventions
+export const getAllInterventions = async (req, res) => {
+  try {
+    const interventions = await Intervention.find()
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const studentIds = interventions.map(i => i.studentId);
+    const facultyIds = interventions.map(i => i.facultyId);
+
+    const [students, faculties] = await Promise.all([
+      User.find({ studentId: { $in: studentIds } }).select('name studentId'),
+      User.find({ _id: { $in: facultyIds } }).select('name'),
+    ]);
+
+    const studentMap = Object.fromEntries(students.map(s => [s.studentId, s.name]));
+    const facultyMap = Object.fromEntries(faculties.map(f => [f._id.toString(), f.name]));
+
+    const enriched = interventions.map(i => ({
+      ...i,
+      studentName: studentMap[i.studentId] || i.studentId,
+      facultyName: facultyMap[i.facultyId.toString()] || 'Unknown',
+      status: i.outcome,
+      type: 'Academic Warning', // Placeholder or add to model
+    }));
+
+    res.json({ interventions: enriched });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+

@@ -454,8 +454,18 @@ export const getStudentFullProfile = async (req, res) => {
     }
     const studentId = req.params.id;
     const student = await User.findOne({ studentId }).select('-password');
-    const marks = await Marks.find({ studentId });
-    const attendance = await Attendance.find({ studentId });
+    const allMarks = await Marks.find({ studentId });
+    const allAttendance = await Attendance.find({ studentId });
+    
+    // Deduplicate marks: Take latest by subject
+    const markMap = new Map();
+    for (const m of allMarks) markMap.set(m.subject, m);
+    const marks = Array.from(markMap.values());
+
+    // Deduplicate attendance: Take latest by subject
+    const attMap = new Map();
+    for (const a of allAttendance) attMap.set(a.subject, a);
+    const attendance = Array.from(attMap.values());
     const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
     const alerts = await Alert.find({ studentId }).sort({ sentAt: -1 }).limit(10);
 
@@ -610,3 +620,35 @@ export const getFacultyEffectiveness = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// GET /api/faculty/student/:id/longitudinal
+export const getStudentLongitudinal = async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const insights = await Insight.find({ studentId }).sort({ semester: 1 });
+    // Deduplicate insights by semester if any duplicates exist? Given it's by semester, let's keep it simple.
+    // Map to keep the latest per semester
+    const semMap = new Map();
+    for (const i of insights) {
+       semMap.set(i.semester || 4, i);
+    }
+    const uniqueInsights = Array.from(semMap.values()).sort((a,b) => (a.semester||4) - (b.semester||4));
+
+    const semesters = uniqueInsights.map(i => ({
+      semester: i.semester || 4, classId: i.classId, cgpa: i.cgpa,
+      dropoutProbabilityScore: i.dropoutProbabilityScore,
+      dropoutTier: i.dropoutTier, participationScore: i.participationScore,
+    }));
+
+    const current = uniqueInsights.length ? uniqueInsights[uniqueInsights.length - 1] : null;
+    res.json({
+      semesters,
+      currentSemester: current?.semester || 4,
+      trend: semesters.length >= 2 ? (semesters[semesters.length - 1].cgpa > semesters[semesters.length - 2].cgpa ? 'up' : 'down') : 'stable',
+      consecutiveAtRiskSemesters: current?.consecutiveAtRiskSemesters || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+

@@ -369,7 +369,7 @@ export default function LandingPage() {
       </footer>
 
       {/* Responsive overrides */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media (max-width: 900px) {
           nav { padding: 14px 20px !important; }
           section { padding-left: 20px !important; padding-right: 20px !important; }
@@ -380,7 +380,7 @@ export default function LandingPage() {
         @media (max-width: 600px) {
           section > div[style*="grid-template-columns: repeat(4"] { grid-template-columns: 1fr 1fr !important; }
         }
-      `}</style>
+      `}} />
     </div>
   );
 }
