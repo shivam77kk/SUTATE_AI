@@ -145,12 +145,20 @@ export const getRadarData = async (req, res) => {
   try {
     const { studentId } = req.user;
     const marks = await Marks.find({ studentId });
-    const data = marks.map(m => {
+    
+    // Deduplicate marks: Take latest score per subject
+    const subjectMap = new Map();
+    for (const m of marks) {
       const total = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);
-      // Normalise to 0-100 (max total = 160)
       const score = Math.round((total / 160) * 100);
-      return { subject: m.subject, score };
-    });
+      subjectMap.set(m.subject, score);
+    }
+    
+    const data = Array.from(subjectMap.entries()).map(([subject, score]) => ({
+      subject,
+      score
+    }));
+    
     res.json({ data });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -527,29 +535,24 @@ export const generateQuiz = async (req, res) => {
     const { prompt, subject } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
-    let reply;
-    try {
-      reply = await callGemini(prompt, { maxTokens: 800 });
-    } catch (geminiErr) {
-      console.error('[Quiz] Gemini error:', geminiErr);
-      // Fallback that builds dynamically so it doesn't look identical
-      const fallbackSubject = subject || prompt.match(/about ([\w\s]+)/i)?.[1] || "your studies";
-      reply = JSON.stringify([
-        { 
-          question: `What is the core fundamental principle behind ${fallbackSubject}?`, 
-          options: ["Pattern Matching", "System Design", "Algorithm Analysis", "Theoretical Basics"], 
-          correctIndex: 3, 
-          explanation: `In the context of ${fallbackSubject}, understanding the theoretical basics is always the most critical first step (Offline AI Mode).` 
-        },
-        { 
-          question: `Which of these is a typical challenge when implementing concepts from ${fallbackSubject}?`, 
-          options: ["Syntax errors", "Scalability limitations", "Compiling time", "Documentation"], 
-          correctIndex: 1, 
-          explanation: "Scalability limitations frequently arise as systems grow in complexity." 
-        }
-      ]);
-    }
+    const { callGeminiJSON } = await import('../services/geminiService.js');
     
+    const fallback = [
+      { 
+        question: `What is the core fundamental principle behind ${subject || 'this subject'}?`, 
+        options: ["Pattern Matching", "System Design", "Algorithm Analysis", "Theoretical Basics"], 
+        correctIndex: 3, 
+        explanation: "Understanding the theoretical basics is always the most critical first step." 
+      },
+      { 
+        question: `Which of these is a typical challenge in ${subject || 'this field'}?`, 
+        options: ["Syntax errors", "Scalability limitations", "Compiling time", "Documentation"], 
+        correctIndex: 1, 
+        explanation: "Scalability limitations frequently arise as systems grow in complexity." 
+      }
+    ];
+
+    const reply = await callGeminiJSON(prompt, fallback);
     res.json({ reply });
   } catch (err) {
     console.error('[Quiz] Error:', err);

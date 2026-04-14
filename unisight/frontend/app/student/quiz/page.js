@@ -21,17 +21,14 @@ function QuizGame({ subject, onBack }) {
       try {
         const prompt = `Generate 5 multiple choice questions for ${subject}. Return ONLY valid JSON array: [{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]. NO markdown, NO comments.`;
         const { data } = await api.post('/student/quiz/generate', { subject, prompt });
-        let clean = data.reply.replace(/```json|```/gi, '').trim();
-        const match = clean.match(/(\[[\s\S]*\])/)?.[0];
-        if (match) {
-          const qs = JSON.parse(match);
-          if (Array.isArray(qs) && qs.length > 0) {
-            setQuestions(qs);
-          } else {
-            throw new Error('Invalid questions format');
-          }
+        
+        // The backend now returns a clean object/array via callGeminiJSON
+        const qs = typeof data.reply === 'string' ? JSON.parse(data.reply) : data.reply;
+        
+        if (Array.isArray(qs) && qs.length > 0) {
+          setQuestions(qs);
         } else {
-          throw new Error('No JSON array found');
+          throw new Error('Invalid questions format');
         }
       } catch (err) { 
         console.error('Quiz generation error:', err);

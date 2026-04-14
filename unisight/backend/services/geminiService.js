@@ -13,12 +13,12 @@ export const geminiQueue = new PQueue({
 });
 
 const FALLBACK_MODELS = [
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash-8b-latest',
+  'gemini-2.0-flash-exp',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash-lite',
-  'gemini-flash-lite-latest',
-  'gemini-flash-latest',
-  'gemini-2.0-flash',
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-002',
 ];
 
 let model = null;
