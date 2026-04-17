@@ -1,7 +1,19 @@
 'use client';
 import { motion } from 'framer-motion';
 
+// Extract leading emoji from title text
+function splitEmoji(text) {
+  if (!text) return { emoji: '', rest: text };
+  const emojiRegex = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{2702}-\u{27B0}])\s*/u;
+  const match = text.match(emojiRegex);
+  if (match) {
+    return { emoji: match[1], rest: text.slice(match[0].length) };
+  }
+  return { emoji: '', rest: text };
+}
+
 export function PageHeader({ title, subtitle, action, breadcrumb }) {
+  const { emoji, rest } = splitEmoji(title);
   return (
     <motion.div 
       className="page-header"
@@ -21,12 +33,15 @@ export function PageHeader({ title, subtitle, action, breadcrumb }) {
       )}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h1 className="page-title" style={{ 
-            background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>{title}</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {emoji && <span style={{ WebkitTextFillColor: 'initial', backgroundClip: 'initial', WebkitBackgroundClip: 'initial', background: 'none', fontSize: '0.9em', lineHeight: 1 }}>{emoji}</span>}
+            <span style={{ 
+              background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>{rest}</span>
+          </h1>
           {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </div>
         {action && <motion.div whileHover={{ scale: 1.02 }} style={{ flexShrink: 0 }}>{action}</motion.div>}
@@ -36,3 +51,4 @@ export function PageHeader({ title, subtitle, action, breadcrumb }) {
 }
 
 export default PageHeader;
+

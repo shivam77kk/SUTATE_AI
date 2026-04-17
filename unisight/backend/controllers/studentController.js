@@ -532,31 +532,73 @@ Respond helpfully and encouragingly in 2-4 sentences. Be specific to their data.
 // POST /api/student/quiz/generate
 export const generateQuiz = async (req, res) => {
   try {
-    const { prompt, subject } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+    const { subject } = req.body;
+    if (!subject) return res.status(400).json({ error: 'Subject is required' });
 
-    const { callGeminiJSON } = await import('../services/geminiService.js');
-    
-    const fallback = [
-      { 
-        question: `What is the core fundamental principle behind ${subject || 'this subject'}?`, 
-        options: ["Pattern Matching", "System Design", "Algorithm Analysis", "Theoretical Basics"], 
-        correctIndex: 3, 
-        explanation: "Understanding the theoretical basics is always the most critical first step." 
-      },
-      { 
-        question: `Which of these is a typical challenge in ${subject || 'this field'}?`, 
-        options: ["Syntax errors", "Scalability limitations", "Compiling time", "Documentation"], 
-        correctIndex: 1, 
-        explanation: "Scalability limitations frequently arise as systems grow in complexity." 
-      }
+    const { callGemini, parseGeminiJSON } = await import('../services/geminiService.js');
+    const { getRandomQuestions } = await import('../data/questionBank.js');
+
+    // Generate a unique seed every request to ensure different questions
+    const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const topicVariants = [
+      'fundamentals and core concepts',
+      'advanced topics and real-world applications',
+      'common pitfalls and tricky concepts',
+      'comparisons and differences between key ideas',
+      'problem-solving and analytical thinking',
+      'practical implementation and design patterns',
+      'edge cases and exceptions',
     ];
+    const chosenTopic = topicVariants[Math.floor(Math.random() * topicVariants.length)];
+    const difficulty = ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)];
 
-    const reply = await callGeminiJSON(prompt, fallback);
-    res.json({ reply });
+    const dynamicPrompt = `Generate exactly 5 unique ${difficulty}-difficulty multiple choice questions about "${subject}" focusing on ${chosenTopic}.
+
+IMPORTANT RULES:
+- Unique session ID: ${seed} — generate completely fresh questions for this session.
+- Each question MUST be completely different from the others.
+- Questions must be specifically about ${subject}, not generic.
+- Cover different subtopics within ${subject}.
+- Each question must have exactly 4 options.
+- Only ONE option should be correct.
+
+Return ONLY a valid JSON array with no extra text, no markdown, no code fences:
+[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]
+
+The correctIndex is 0-based (0 for first option, 3 for last).`;
+
+    // Try Gemini first with high temperature for variety
+    let reply = null;
+    try {
+      const raw = await callGemini(dynamicPrompt, { maxTokens: 1500, temperature: 0.9 });
+      reply = parseGeminiJSON(raw);
+    } catch (parseErr) {
+      console.warn('[Quiz] Gemini generation failed:', parseErr.message);
+    }
+
+    // Validate the Gemini response
+    if (Array.isArray(reply) && reply.length >= 3) {
+      const validQuestions = reply.filter(q => 
+        q && typeof q.question === 'string' && 
+        Array.isArray(q.options) && q.options.length === 4 && 
+        typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex <= 3
+      );
+      if (validQuestions.length >= 3) {
+        for (let i = validQuestions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [validQuestions[i], validQuestions[j]] = [validQuestions[j], validQuestions[i]];
+        }
+        return res.json({ reply: validQuestions.slice(0, 5) });
+      }
+    }
+
+    // Fallback: use subject-specific question bank (always different due to random shuffle)
+    console.warn('[Quiz] Using question bank fallback for:', subject);
+    const fallback = getRandomQuestions(subject, 5);
+    res.json({ reply: fallback });
   } catch (err) {
     console.error('[Quiz] Error:', err);
-    res.status(500).json({ error: 'Quiz generation failed' });
+    res.status(500).json({ error: 'Quiz generation failed: ' + err.message });
   }
 };
 
