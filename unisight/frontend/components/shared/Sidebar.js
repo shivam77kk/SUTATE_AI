@@ -78,28 +78,22 @@ export default function Sidebar() {
       style={{ flexShrink: 0 }}
     >
       {/* Logo */}
-          <Link href={`/${role}/dashboard`} style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 24, padding: '0 4px' }}>
+          <Link href={`/${role}/dashboard`} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', marginBottom: 24, padding: '0 4px' }}>
             <motion.div 
               whileHover={{ scale: 1.05 }}
-              style={{ width: 34, height: 34, flexShrink: 0, position: 'relative' }}
+              style={{ flexShrink: 0 }}
             >
-              <img src="/logo.png" alt="SUTATE AI" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              <img 
+                src="/logo.png" 
+                alt="SUTATE AI" 
+                style={{ 
+                  height: collapsed ? '36px' : '48px', 
+                  width: 'auto', 
+                  objectFit: 'contain',
+                  transition: 'height 0.3s ease',
+                }} 
+              />
             </motion.div>
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }} 
-                  animate={{ opacity: 1, x: 0 }} 
-                  exit={{ opacity: 0, x: -10 }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 15, color: 'white', letterSpacing: '-0.02em', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>SUTATE AI</div>
-                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {user ? theme.label : 'Connecting...'}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </Link>
 
       {/* User info */}

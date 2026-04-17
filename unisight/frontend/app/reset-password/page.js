@@ -115,7 +115,12 @@ export default function ResetPasswordPage() {
     <div style={{ minHeight: '100vh', background: '#030306', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, color: 'white' }}>Reset your SUTATE password</h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+            <img src="/logo.png" alt="SUTATE AI" style={{ width: 52, height: 52, objectFit: 'contain', filter: 'drop-shadow(0 0 12px rgba(99,102,241,0.45))' }} />
+            <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 22, fontWeight: 800, color: 'white', letterSpacing: '-0.03em' }}>SUTATE AI</span>
+          </div>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: 'white', marginBottom: 6 }}>Reset your password</h1>
+          <p style={{ fontSize: 13, color: '#64748b' }}>Create a new secure password below</p>
         </div>
         <div style={{ background: '#0d0d1f', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '32px 28px' }}>
           <Suspense fallback={<div className="skeleton" style={{ height: 200, borderRadius: 12 }} />}>

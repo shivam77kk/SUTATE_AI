@@ -106,10 +106,7 @@ export default function LandingPage() {
           padding: '14px 48px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: '800', letterSpacing: '-0.03em' }} className="gradient-text">SUTATE</span>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: '300', color: 'rgba(255,255,255,0.3)' }}> AI</span>
-        </div>
+        <img src="/logo.png" alt="SUTATE AI" style={{ height: '52px', width: 'auto', objectFit: 'contain', display: 'block' }} />
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <a href="#features" style={{ padding: '7px 16px', color: '#64748b', fontSize: '13px', fontWeight: '600', textDecoration: 'none', borderRadius: '8px', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#64748b'}>Features</a>
@@ -356,10 +353,7 @@ export default function LandingPage() {
         background: 'rgba(3,3,8,0.8)',
         backdropFilter: 'blur(12px)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '16px', fontWeight: '800', letterSpacing: '-0.02em' }} className="gradient-text">SUTATE</span>
-          <span style={{ fontSize: '16px', fontWeight: '300', color: 'rgba(255,255,255,0.3)' }}> AI</span>
-        </div>
+        <img src="/logo.png" alt="SUTATE AI" style={{ height: '40px', width: 'auto', objectFit: 'contain', display: 'block' }} />
         <div style={{ fontSize: '12px', color: '#334155' }}>
           Smart University Data Automation Technology & Analytics Engine — AI-driven insights for every stakeholder
         </div>

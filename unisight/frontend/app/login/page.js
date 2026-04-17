@@ -111,17 +111,14 @@ export default function LoginPage() {
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
           style={{ textAlign: 'center', marginBottom: 36 }}
         >
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, marginBottom: 8, justifyContent: 'center', width: '100%' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, width: '100%' }}>
             <motion.div
               initial={{ rotate: -10, opacity: 0 }}
               animate={{ rotate: 0, opacity: 1 }}
-              style={{ width: 56, height: 56, flexShrink: 0, position: 'relative' }}
+              style={{ height: 80, flexShrink: 0, position: 'relative' }}
             >
-              <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              <img src="/logo.png" alt="Logo" style={{ height: '100%', width: 'auto', objectFit: 'contain' }} />
             </motion.div>
-            <span style={{ fontSize: 26, fontWeight: 800, color: 'white', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.03em', textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-              SUTATE AI
-            </span>
           </div>
           <p style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Smart University Analytics Platform</p>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 10 }}>

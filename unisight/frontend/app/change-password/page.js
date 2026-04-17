@@ -59,7 +59,10 @@ export default function ChangePasswordPage() {
     }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>🔐</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+            <img src="/logo.png" alt="SUTATE AI" style={{ width: 52, height: 52, objectFit: 'contain', filter: 'drop-shadow(0 0 12px rgba(99,102,241,0.45))' }} />
+            <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 22, fontWeight: 800, color: 'white', letterSpacing: '-0.03em' }}>SUTATE AI</span>
+          </div>
           <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, color: 'white' }}>Set your password</h1>
           <p style={{ color: '#64748b', fontSize: 13, marginTop: 6 }}>Choose a strong password to secure your SUTATE account.</p>
         </div>

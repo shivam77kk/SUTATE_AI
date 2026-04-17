@@ -33,8 +33,11 @@ export default function ForgotPasswordPage() {
           <a href="/login" style={{ color: '#64748b', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 24, textDecoration: 'none' }}>
             ← Back to sign in
           </a>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📧</div>
-          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, color: 'white' }}>Reset your password</h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+            <img src="/logo.png" alt="SUTATE AI" style={{ height: 80, width: 'auto', objectFit: 'contain' }} />
+          </div>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: 'white', marginBottom: 6 }}>Reset your password</h1>
+          <p style={{ fontSize: 13, color: '#64748b' }}>Enter your email to receive a reset link</p>
         </div>
 
         <div style={{ background: '#0d0d1f', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '32px 28px' }}>
