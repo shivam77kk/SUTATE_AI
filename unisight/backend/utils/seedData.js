@@ -244,7 +244,7 @@ async function seed() {
   }
   console.log('IT marks and attendance seeded');
 
-  // Create upload logs so faculty dashboard KPI cards show data
+ 
   await UploadLog.create({
     uploadId: 'seed-upload-cse-001',
     facultyId: faculty1._id,
@@ -294,7 +294,7 @@ async function seed() {
       riskAtSend: 'MEDIUM', outcome: 'pending' 
     },
   ];
-  const InterventionModel = (await import('../models/Intervention.js')).default; // This one is not at top
+  const InterventionModel = (await import('../models/Intervention.js')).default;
   await InterventionModel.insertMany(sampleInterventions);
   console.log('Sample interventions seeded');
 

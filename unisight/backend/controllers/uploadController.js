@@ -5,8 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import User from '../models/User.js';
 import UploadLog from '../models/UploadLog.js';
 import Insight from '../models/Insight.js';
-
-// POST /api/upload/validate
+
 export const validateCSV = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No CSV file provided' });
@@ -24,7 +23,7 @@ export const validateCSV = async (req, res) => {
     const validRows = [];
     let matchedCount = 0;
 
-    // ── Flexible student ID column detection ──
+   
     const STUDENT_ID_HEADERS = [
       'Roll No', 'Roll_No', 'RollNo', 'roll_no', 'rollno', 'roll no',
       'Student ID', 'Student_ID', 'StudentID', 'student_id', 'studentId', 'studentid',
@@ -32,7 +31,7 @@ export const validateCSV = async (req, res) => {
       'Enrollment No', 'enrollment_no', 'EnrollmentNo',
     ];
 
-    // Find which header exists in the CSV
+   
     const csvHeaders = csvRows.length > 0 ? Object.keys(csvRows[0]) : [];
     const studentIdHeader = csvHeaders.find(h => 
       STUDENT_ID_HEADERS.includes(h) || 
@@ -46,7 +45,7 @@ export const validateCSV = async (req, res) => {
       warnings.push(`No recognized student ID column found. Looked for: Roll No, Student ID, studentId, id. Found columns: ${csvHeaders.join(', ')}`);
     }
 
-    // ── Check each row against registered students ──
+   
     for (let i = 0; i < csvRows.length; i++) {
       const row = csvRows[i];
       const studentId = studentIdHeader ? row[studentIdHeader] : (row['Roll No'] || row['Student ID'] || row['studentId']);
@@ -70,7 +69,7 @@ export const validateCSV = async (req, res) => {
         validRows.push(row);
         matchedCount++;
       } else {
-        // Find fuzzy suggestions
+       
         const suggestions = await findSuggestions(studentId, department);
         mismatches.push({
           row: i + 1,
@@ -81,12 +80,12 @@ export const validateCSV = async (req, res) => {
       }
     }
 
-    // If NO students matched but we have rows, add a helpful warning
+   
     if (matchedCount === 0 && csvRows.length > 0) {
       warnings.push(`None of the ${csvRows.length} student IDs in the CSV matched registered students. Make sure students are registered first via Admin → Users.`);
     }
 
-    // ── Create a 'pending_validation' log to store results ──
+   
     await UploadLog.create({
       uploadId: validationId,
       facultyId: req.user.userId,
@@ -100,7 +99,7 @@ export const validateCSV = async (req, res) => {
         mismatches,
         matchedCount
       },
-      tempData: JSON.stringify(validRows), // Store ONLY valid rows for next step
+      tempData: JSON.stringify(validRows),
     });
 
     res.json({
@@ -110,7 +109,7 @@ export const validateCSV = async (req, res) => {
       validRows: matchedCount,
       mismatchCount: mismatches.length,
       errorRows: mismatches.length,
-      mismatches: mismatches.slice(0, 10), // Return first 10 for UI preview
+      mismatches: mismatches.slice(0, 10),
       errors: errors.slice(0, 20),
       warnings,
       requiresApproval: mismatches.length > 0
@@ -127,7 +126,7 @@ export const uploadCSV = async (req, res) => {
     const { validationId, classId, department, semester } = req.body;
     if (!validationId) return res.status(400).json({ error: 'Validation ID is required' });
 
-    // 1. Find the validation log
+   
     const log = await UploadLog.findOne({ uploadId: validationId, facultyId: req.user.userId });
     if (!log) return res.status(404).json({ error: 'Validation session not found' });
 
@@ -135,20 +134,20 @@ export const uploadCSV = async (req, res) => {
       return res.status(400).json({ error: 'This file has already been processed' });
     }
 
-    // 2. Parse the temporary valid rows
+   
     const validRows = JSON.parse(log.tempData || '[]');
     if (validRows.length === 0) {
       return res.status(400).json({ error: 'No valid registered students found in this file to process.' });
     }
 
-    // 3. Update log status to processing
+   
     log.status = 'processing';
     log.classId = classId;
     log.semester = parseInt(semester) || log.semester || 4;
     log.studentCount = validRows.length;
     await log.save();
 
-    // 4. Run pipeline
+   
     setIO(req.io);
     runPipeline({
       csvRows: validRows,
@@ -170,8 +169,7 @@ export const uploadCSV = async (req, res) => {
     res.status(500).json({ error: 'Upload failed: ' + err.message });
   }
 };
-
-// GET /api/upload/mismatch-report/:id
+
 export const getMismatchReport = async (req, res) => {
   try {
     const log = await UploadLog.findOne({ uploadId: req.params.id });
@@ -190,8 +188,7 @@ export const getMismatchReport = async (req, res) => {
     res.status(500).json({ error: 'Failed to generate report' });
   }
 };
-
-// GET /api/faculty/template-csv
+
 export const getTemplateCSV = async (req, res) => {
   const headers = 'Roll No,Name,DBMS,OS,CN,DSA,Maths,Attendance %';
   const sample = 'S001,John Doe,85,78,92,88,76,82';
@@ -199,8 +196,7 @@ export const getTemplateCSV = async (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="unisight-template.csv"');
   res.send(`${headers}\n${sample}`);
 };
-
-// GET /api/faculty/data-completeness
+
 export const getDataCompleteness = async (req, res) => {
   try {
     const totalStudents = await User.countDocuments({ role: 'student', department: req.user.department });
@@ -231,7 +227,7 @@ export const getUploadLogs = async (req, res) => {
 export const setAutoRerun = async (req, res) => {
   try {
     const { classId } = req.params;
-    const { enabled, schedule } = req.body; // schedule: 'daily' | 'weekly'
+    const { enabled, schedule } = req.body;
     await User.findByIdAndUpdate(req.user.userId, { autoRerunEnabled: enabled, autoRerunSchedule: schedule });
     res.json({ message: 'Auto re-analysis schedule updated' });
   } catch (err) {

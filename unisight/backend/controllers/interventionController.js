@@ -1,14 +1,13 @@
 import Intervention from '../models/Intervention.js';
 import User from '../models/User.js';
-
-// GET /api/interventions/my
+
 export const getMyInterventions = async (req, res) => {
   try {
     const interventions = await Intervention.find({ facultyId: req.user.userId })
       .sort({ sentAt: -1 })
       .lean();
 
-    // Enrich with student names
+   
     const studentIds = [...new Set(interventions.map(i => i.studentId))];
     const students = await User.find({ studentId: { $in: studentIds } }).select('name studentId');
     const nameMap = {};
@@ -35,8 +34,7 @@ export const getMyInterventions = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/interventions/stats
+
 export const getInterventionStats = async (req, res) => {
   try {
     const filter = req.user.role === 'faculty' ? { facultyId: req.user.userId } : {};
@@ -52,8 +50,7 @@ export const getInterventionStats = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/interventions
+
 export const getAllInterventions = async (req, res) => {
   try {
     const interventions = await Intervention.find()
@@ -76,7 +73,7 @@ export const getAllInterventions = async (req, res) => {
       studentName: studentMap[i.studentId] || i.studentId,
       facultyName: facultyMap[i.facultyId.toString()] || 'Unknown',
       status: i.outcome,
-      type: 'Academic Warning', // Placeholder or add to model
+      type: 'Academic Warning',
     }));
 
     res.json({ interventions: enriched });

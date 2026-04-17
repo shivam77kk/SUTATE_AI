@@ -7,7 +7,7 @@ export const generateStudentReport = (user, marks, attendance, insight, res) => 
   
   doc.pipe(res);
 
-  // Formatting and styling specifically requested
+ 
   doc.fontSize(22).fillColor('#4F46E5').text('UniSight Performance Report', { align: 'center' });
   doc.moveDown(0.5);
   doc.fontSize(12).fillColor('#4B5563').text(`Student: ${user?.name || 'N/A'}`, { align: 'center' });

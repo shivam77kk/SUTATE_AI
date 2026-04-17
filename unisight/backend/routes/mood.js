@@ -13,7 +13,7 @@ router.get('/status', (req, res) => {
 });
 
 router.get('/history', (req, res) => {
-  // Return empty history - this is a stub until mood tracking is fully implemented
+ 
   res.json({ 
     history: [],
     avgMood: 0,

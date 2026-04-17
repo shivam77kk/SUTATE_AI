@@ -2,8 +2,7 @@ import User from '../models/User.js';
 import Insight from '../models/Insight.js';
 import UploadLog from '../models/UploadLog.js';
 import { sendStudentAlert } from '../services/emailService.js';
-
-// POST /api/alerts/:studentId
+
 export const sendAlert = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -17,7 +16,7 @@ export const sendAlert = async (req, res) => {
 
     await sendStudentAlert({ student, insight, faculty });
 
-    // Remove from pending alerts in the latest upload log
+   
     await UploadLog.updateMany(
       { facultyId: req.user.userId },
       { $pull: { pendingAlerts: studentId } }

@@ -1,6 +1,5 @@
 import AdminLog from '../models/AdminLog.js';
-
-// GET /api/admin/logs
+
 export const getAdminLogs = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;

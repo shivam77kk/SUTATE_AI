@@ -149,12 +149,7 @@ export function parseGeminiJSON(text) {
   return JSON.parse(s);
 }
 
-export async function callGeminiJSON(prompt, fallback = null) {
-  try {
-    const raw = await callGemini(prompt);
-    return parseGeminiJSON(raw);
-  } catch (err) {
-    console.warn('[GeminiJSON] Failed, returning fallback:', err.message?.substring(0, 100));
-    return fallback;
-  }
+export async function callGeminiJSON(prompt) {
+  const raw = await callGemini(prompt);
+  return parseGeminiJSON(raw);
 }

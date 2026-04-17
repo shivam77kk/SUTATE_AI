@@ -66,7 +66,7 @@ Return ONLY a JSON object with:
 
 RULES:
 1. Return ONLY the JSON object.
-2. NO comments (// or /*) inside JSON.
+2. NO comments 
 3. NO trailing commas.
 
 Base recommendations on the actual data — mention specific subjects and numbers. Never be generic.

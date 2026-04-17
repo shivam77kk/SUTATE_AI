@@ -8,8 +8,7 @@ import TeacherInsight from '../models/TeacherInsight.js';
 import PDFDocument from 'pdfkit';
 import { callGemini } from '../services/geminiService.js';
 import { textToSpeech } from '../services/voiceService.js';
-
-// GET /api/faculty/dashboard
+
 export const getFacultyDashboard = async (req, res) => {
   try {
     const latestCompleteLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' }).sort({ createdAt: -1 });
@@ -22,7 +21,7 @@ export const getFacultyDashboard = async (req, res) => {
     let proactiveAlerts = [];
 
     if (latestCompleteLog && latestCompleteLog.pendingAlerts?.length) {
-      // Use pending alerts from the latest complete upload log
+     
       const studentIds = latestCompleteLog.pendingAlerts.slice(0, 5);
       proactiveAlerts = await Promise.all(studentIds.map(async (id) => {
         const user = await User.findOne({ studentId: id }).select('name department').lean();
@@ -37,7 +36,7 @@ export const getFacultyDashboard = async (req, res) => {
         };
       }));
     } else {
-      // Fallback: pull HIGH/MEDIUM risk students directly from Insight for faculty's department
+     
       const facultyUser = await User.findById(req.user.userId).select('department');
       const dept = facultyUser?.department;
       const riskInsights = await Insight.find(
@@ -75,8 +74,7 @@ export const getFacultyDashboard = async (req, res) => {
   }
 };
 
-
-// POST /api/faculty/send-alert
+
 export const sendStudentAlert = async (req, res) => {
   try {
     const { studentId } = req.body;
@@ -107,11 +105,11 @@ Write a 150-200 word email that is warm but firm, explaining the concern and req
     try {
       emailText = await callGemini(prompt, { maxTokens: 400 });
     } catch (geminiErr) {
-      console.warn('[SendAlert] Gemini failed, using template fallback:', geminiErr.message);
-      emailText = `Subject: Academic Performance Alert — ${studentId}\n\nDear ${student?.name || studentId},\n\nThis is to inform you that our academic monitoring system has flagged your performance as needing attention.\n\nRisk Level: ${insight?.riskLevel || 'MEDIUM'}\nReason: ${insight?.riskReason || 'Performance indicators suggest room for improvement'}\nMarks: ${marksSummary || 'No marks data available'}\nAttendance: ${attSummary || 'No attendance data available'}\n\nWe encourage you to meet with your faculty advisor to discuss strategies for improvement. Remember, seeking help early is a sign of strength.\n\nBest regards,\nYour Faculty`;
+      console.error('[SendAlert] Gemini failed:', geminiErr.message);
+      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });
     }
 
-    // Log the alert
+   
     await Alert.create({
       studentId,
       facultyId: req.user.userId,
@@ -126,8 +124,7 @@ Write a 150-200 word email that is warm but firm, explaining the concern and req
   }
 };
 
-
-// GET /api/faculty/classes
+
 export const getMyClasses = async (req, res) => {
   try {
     if (false && !global.dbConnected) {
@@ -140,13 +137,13 @@ export const getMyClasses = async (req, res) => {
     }    const facultyUser = await User.findById(req.user.userId).select('department');
     const dept = facultyUser?.department;
 
-    // Aggregate unique classes from both logs and existing student data
+   
     const logs = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).lean();
     const insights = await Insight.find(dept ? { department: dept } : {}).lean();
 
     const classMap = {};
 
-    // 1. Process seeded/existing data first
+   
     for (const ins of insights) {
       const cid = ins.classId;
       if (!cid) continue;
@@ -165,7 +162,7 @@ export const getMyClasses = async (req, res) => {
       if (ins.riskLevel && ins.riskLevel !== 'LOW') classMap[cid].atRiskCount++;
     }
 
-    // 2. Overlay log data for most recent status
+   
     for (const log of logs) {
       if (!classMap[log.classId]) {
         classMap[log.classId] = {
@@ -178,7 +175,7 @@ export const getMyClasses = async (req, res) => {
           status: log.status,
         };
       } else {
-        // Update with log info if log is more recent or has specific status
+       
         classMap[log.classId].status = log.status;
         if (log.studentCount > 0) classMap[log.classId].studentCount = log.studentCount;
       }
@@ -191,8 +188,7 @@ export const getMyClasses = async (req, res) => {
   }
 };
 
-
-// GET /api/faculty/pending-alerts
+
 export const getPendingAlerts = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -215,7 +211,7 @@ export const getPendingAlerts = async (req, res) => {
       studentIds = latestLog.pendingAlerts;
       sourceClassId = latestLog.classId;
     } else {
-      // Fallback: show all HIGH/MEDIUM risk students from faculty's department
+     
       const facultyUser = await User.findById(req.user.userId).select('department');
       const dept = facultyUser?.department;
       const riskInsights = await Insight.find(
@@ -256,7 +252,7 @@ export const getPendingAlerts = async (req, res) => {
       })
     );
 
-    // Sort: HIGH first
+   
     studentData.sort((a, b) => {
       const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
       return (order[a.riskLevel] ?? 2) - (order[b.riskLevel] ?? 2);
@@ -268,8 +264,7 @@ export const getPendingAlerts = async (req, res) => {
   }
 };
 
-
-// GET /api/faculty/class/:id/summary
+
 export const getClassSummary = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -345,8 +340,7 @@ export const getClassSummary = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/faculty/class/:id/heatmap
+
 export const getClassHeatmap = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -380,21 +374,20 @@ export const getClassHeatmap = async (req, res) => {
           row[subject] = 0;
         }
       }
-      // add avg for sorting
+     
       const vals = subjects.map(s => row[s] || 0);
       row._avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
       return row;
     });
 
-    data.sort((a, b) => a._avg - b._avg); // worst at top
+    data.sort((a, b) => a._avg - b._avg);
 
     res.json({ students: studentIds, subjects, data });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/faculty/class/:id/report/pdf
+
 export const downloadClassReport = async (req, res) => {
   try {
     const classId = req.params.id;
@@ -438,8 +431,7 @@ export const downloadClassReport = async (req, res) => {
     res.status(500).json({ error: 'PDF generation failed' });
   }
 };
-
-// GET /api/faculty/student/:id/full-profile
+
 export const getStudentFullProfile = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -463,19 +455,19 @@ export const getStudentFullProfile = async (req, res) => {
     const allMarks = await Marks.find({ studentId });
     const allAttendance = await Attendance.find({ studentId });
     
-    // Deduplicate marks: Take latest by subject
+   
     const markMap = new Map();
     for (const m of allMarks) markMap.set(m.subject, m);
     const marks = Array.from(markMap.values());
 
-    // Deduplicate attendance: Take latest by subject
+   
     const attMap = new Map();
     for (const a of allAttendance) attMap.set(a.subject, a);
     const attendance = Array.from(attMap.values());
     const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
     const alerts = await Alert.find({ studentId }).sort({ sentAt: -1 }).limit(10);
 
-    // Timeline events
+   
     const events = [];
     for (const m of marks) {
       const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);
@@ -532,8 +524,7 @@ export const getStudentFullProfile = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/faculty/class/:id/voice-summary
+
 export const getClassVoiceSummary = async (req, res) => {
   try {
     const { id: classId } = req.params;
@@ -559,8 +550,8 @@ Start with: "Here is your class summary."
     try {
       summary = await callGemini(prompt, { maxTokens: 100, temperature: 0.3 });
     } catch (geminiErr) {
-      console.warn('[VoiceSummary] Gemini failed, using template:', geminiErr.message);
-      summary = `Here is your class summary. You have ${total} students in this class, with ${atRisk} at high risk. ${passing} students are currently passing, and the average CGPA is ${avgCgpa}. ${atRisk > 0 ? 'Some students need immediate attention.' : 'Overall performance looks good.'}`;
+      console.error('[VoiceSummary] Gemini failed:', geminiErr.message);
+      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });
     }
 
     let audioData = null;
@@ -580,23 +571,22 @@ Start with: "Here is your class summary."
   }
 };
 
-
-// GET /api/faculty/effectiveness
+
 export const getFacultyEffectiveness = async (req, res) => {
   try {
     const facultyId = req.user.userId;
     const facultyUser = await User.findById(facultyId).select('department');
     
-    // 1. Get current performance from Insight & Marks for their department/classes
+   
     const dept = facultyUser?.department;
     const insights = await Insight.find(dept ? { department: dept } : {});
     const classes = [...new Set(insights.map(i => i.classId))];
 
-    // 2. Generate or fetch insights
+   
     let scores = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 });
 
     if (scores.length === 0 && insights.length > 0) {
-       // Create an initial dynamic insight if none exists
+      
        const total = insights.length;
        const atRisk = insights.filter(i => i.riskLevel !== 'LOW').length;
        const passRate = insights.length ? Math.round(insights.filter(i => (i.cgpa || 0) >= 4).length / total * 100) : 0;
@@ -638,14 +628,13 @@ export const getFacultyEffectiveness = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/faculty/student/:id/longitudinal
+
 export const getStudentLongitudinal = async (req, res) => {
   try {
     const studentId = req.params.id;
     const insights = await Insight.find({ studentId }).sort({ semester: 1 });
-    // Deduplicate insights by semester if any duplicates exist? Given it's by semester, let's keep it simple.
-    // Map to keep the latest per semester
+   
+   
     const semMap = new Map();
     for (const i of insights) {
        semMap.set(i.semester || 4, i);

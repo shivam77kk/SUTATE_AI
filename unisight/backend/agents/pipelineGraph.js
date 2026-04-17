@@ -6,8 +6,7 @@ import Notification from '../models/Notification.js';
 import Intervention from '../models/Intervention.js';
 import StudentGoal from '../models/StudentGoal.js';
 import User from '../models/User.js';
-import ParentContact from '../models/ParentContact.js';
-// import nodemailer from 'nodemailer';
+import ParentContact from '../models/ParentContact.js';
 import { callGeminiJSON } from './geminiService.js';
 import { runTeacherEffectivenessAgent } from './teacherEffectivenessAgent.js';
 import PQueue from 'p-queue';
@@ -18,8 +17,7 @@ export function setIO(io) { ioInstance = io; }
 const transporter = {
   sendMail: async () => {}
 };
-
-// Agent 1: Column Normaliser
+
 function normaliseColumns(rawRows) {
   if (!rawRows.length) throw new Error('CSV is empty');
 
@@ -54,17 +52,17 @@ function normaliseColumns(rawRows) {
 
   return rawRows.map(row => {
     const norm = { _unmapped: {} };
-    // Map standard fields
+   
     for (const [original, standardised] of Object.entries(mapping)) {
       if (row[original] !== undefined) norm[standardised] = row[original];
     }
-    // Collect unmapped numeric/potential subject data
+   
     for (const header of headers) {
       if (!mappedOriginals.has(header)) {
         norm._unmapped[header] = row[header];
       }
     }
-    // Derive attendance if only Pct is provided
+   
     if (norm.attendancePct !== undefined && norm.attendanceAttended === undefined) {
       const pct = parseFloat(norm.attendancePct);
       if (!isNaN(pct)) {
@@ -75,8 +73,7 @@ function normaliseColumns(rawRows) {
     return norm;
   });
 }
-
-// Agent 2: Performance Analyser
+
 function analysePerformance(normRows) {
   const studentMap = {};
   for (const row of normRows) {
@@ -84,7 +81,7 @@ function analysePerformance(normRows) {
     if (!id) continue;
     if (!studentMap[id]) studentMap[id] = { studentId: id, name: row.name || id, subjects: [] };
 
-    // Standard Long Format (Subject per row)
+   
     if (row.subject) {
       const totalScore = (Number(row.ut1)||0) + (Number(row.midSem)||0) +
                          (Number(row.ut2)||0) + (Number(row.endSem)||0);
@@ -107,11 +104,11 @@ function analysePerformance(normRows) {
         overallActivityScore: row.overallActivityScore !== undefined ? Number(row.overallActivityScore) : null,
       });
     } 
-    // Wide Format (Multiple subjects as columns)
+   
     else {
       for (const [key, value] of Object.entries(row._unmapped || {})) {
         const score = Number(value);
-        // If it's a number and not obviously a metadata column
+       
         if (!isNaN(score) && !['semester', 'year', 'sem', 'id', 'classid', 'batch'].includes(key.toLowerCase())) {
           studentMap[id].subjects.push({
             subject: key,
@@ -147,8 +144,7 @@ function analysePerformance(normRows) {
     };
   });
 }
-
-// Agent 3: Dropout Probability
+
 async function computeDropoutProbability(students, classId, attendanceThreshold = 75, passingScoreThreshold = 40) {
   const results = [];
   for (const student of students) {
@@ -211,8 +207,7 @@ async function computeDropoutProbability(students, classId, attendanceThreshold 
   }
   return results;
 }
-
-// Agent 4: Recommendation Engine
+
 async function generateRecommendations(students, classId, department, semester, facultyId) {
   const savedInsights = [];
   const ranked = [...students].sort((a, b) => b.avgScore - a.avgScore);
@@ -236,7 +231,7 @@ async function generateRecommendations(students, classId, department, semester, 
     let aiOutput;
 
     if (!isAtRisk) {
-      // Standardized high-quality template for LOW risk students (Saves API calls)
+     
       aiOutput = {
         riskReason: "All academic parameters (attendance and marks) are within optimal ranges.",
         recommendations: [
@@ -352,8 +347,7 @@ Student data:
   const results = await queue.addAll(tasks);
   return results;
 }
-
-// Main pipeline runner
+
 export async function runPipeline({ csvRows, uploadId, classId, department, semester, facultyId }) {
   const startTime = Date.now();
   const emit = (agent, status) => {
@@ -377,7 +371,7 @@ export async function runPipeline({ csvRows, uploadId, classId, department, seme
     const insights = await generateRecommendations(riskData, classId, department, semester, facultyId);
     emit('Recommendation Engine', 'complete');
 
-    // ST004: Agent 5 Teaching Analyser
+   
     emit('Teaching Analyser', 'running');
     try {
       await runTeacherEffectivenessAgent({ facultyId, classId, department, semester, students: riskData });

@@ -9,7 +9,7 @@ class DigestService {
   }
 
   startWeeklyDigest() {
-    // Run every Sunday at 9 AM
+   
     cron.schedule('0 9 * * 0', async () => {
       console.log('Running weekly digest generation for all students...');
       try {
@@ -48,8 +48,8 @@ class DigestService {
         Log in to your dashboard to view personalized AI recommendations and ensure you're on track for your goals!
       `;
 
-      // In a real application, send via nodemailer/sendgrid
-      // console.log(\`Sending digest to \${student.email}:\`, emailContent);
+     
+     
     } catch (err) {
       console.error(`Failed digest for ${student.email}:`, err);
     }

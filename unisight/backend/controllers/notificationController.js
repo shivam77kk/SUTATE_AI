@@ -1,6 +1,5 @@
 import Notification from '../models/Notification.js';
-
-// GET /api/notifications?page=1&limit=20
+
 export const getNotifications = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -28,8 +27,7 @@ export const getNotifications = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// PATCH /api/notifications/:id/read
+
 export const markRead = async (req, res) => {
   try {
     await Notification.findOneAndUpdate(
@@ -41,8 +39,7 @@ export const markRead = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// PATCH /api/notifications/read-all
+
 export const markAllRead = async (req, res) => {
   try {
     await Notification.updateMany({ userId: req.user.userId, isRead: false }, { isRead: true });

@@ -27,7 +27,7 @@ const uploadLogSchema = new mongoose.Schema({
     }],
     matchedCount: { type: Number, default: 0 }
   },
-  tempData: { type: String }, // JSON string of valid rows stored after validation
+  tempData: { type: String },
   errorMessage:     { type: String, default: null },
 }, { timestamps: true });
 export default mongoose.model('UploadLog', uploadLogSchema);

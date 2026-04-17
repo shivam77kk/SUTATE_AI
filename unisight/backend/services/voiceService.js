@@ -1,16 +1,12 @@
-// services/voiceService.js
+
 import axios from 'axios';
 import dotenv from 'dotenv';
 dotenv.config();
-
-// Read both dynamically so any .env change takes effect after nodemon restart
+
 const getApiKey  = () => process.env.ELEVENLABS_API_KEY;
 const getVoiceId = () => process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
 
-/**
- * Converts text to speech using ElevenLabs API.
- * Returns a base64 data URL of the mp3 audio, or null on failure.
- */
+
 export async function textToSpeech(text) {
   const API_KEY  = getApiKey();
   const VOICE_ID = getVoiceId();
@@ -22,7 +18,7 @@ export async function textToSpeech(text) {
 
   console.log(`[Voice] TTS → voice: ${VOICE_ID} | key: ${API_KEY.substring(0, 12)}...`);
 
-  // Trim to 500 chars to save quota
+ 
   const trimmedText = text.length > 500 ? text.substring(0, 497) + '...' : text;
 
   try {
@@ -30,7 +26,7 @@ export async function textToSpeech(text) {
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       {
         text: trimmedText,
-        // eleven_multilingual_v2 works with all voice IDs including cloned voices
+       
         model_id: 'eleven_multilingual_v2',
         voice_settings: {
           stability: 0.5,
@@ -65,10 +61,7 @@ export async function textToSpeech(text) {
   }
 }
 
-/**
- * Test ElevenLabs API key + voice ID connectivity.
- * Returns { ok, voiceId, voiceName?, status?, error? }
- */
+
 export async function testElevenLabsConnection() {
   const API_KEY  = getApiKey();
   const VOICE_ID = getVoiceId();

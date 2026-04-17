@@ -84,7 +84,7 @@ export const getCohortDetail = async (req, res) => {
       
       RULES:
       1. Return ONLY a valid JSON object.
-      2. NO comments (// or /*) inside JSON.
+      2. NO comments 
       3. NO trailing commas.
 
       Format:
@@ -106,7 +106,7 @@ export const getCohortDetail = async (req, res) => {
       semesterData: cohort.semesterData,
       predictedDropouts: cohort.predictedDropouts,
       retentionSummary: cohort.aiRetentionSummary,
-      topAtRiskStudents: [] // Computed client-side or from Insights joins
+      topAtRiskStudents: []
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

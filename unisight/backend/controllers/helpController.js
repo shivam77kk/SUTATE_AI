@@ -19,7 +19,7 @@ export const submitRequest = async (req, res) => {
       status: 'open',
     });
 
-    // Notify Faculty of the department and all Admins
+   
     const staffToNotify = await User.find({
       $or: [
         { role: 'faculty', department: req.user.department },
@@ -39,7 +39,7 @@ export const submitRequest = async (req, res) => {
       
       await Notification.insertMany(notifications);
 
-      // Emit real-time events to staff rooms
+     
       req.io?.to(`faculty-${req.user.department}`).emit('notification:new', {
         title: 'New Help Request',
         message: `${req.user.name} needs assistance with ${subject}`,

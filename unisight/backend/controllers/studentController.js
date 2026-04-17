@@ -7,8 +7,7 @@ import ChatHistory from '../models/ChatHistory.js';
 import StudentGoal from '../models/StudentGoal.js';
 import { callGemini, callGeminiJSON } from '../services/geminiService.js';
 import PDFDocument from 'pdfkit';
-
-// GET /api/student/me
+
 export const getStudentProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password').lean();
@@ -19,7 +18,7 @@ export const getStudentProfile = async (req, res) => {
     const attendanceRows = await Attendance.find({ studentId });
     const marksRows = await Marks.find({ studentId });
     
-    // Aggregation Fallback if Insight is missing
+   
     let cgpa = insight?.cgpa ?? null;
     if (!cgpa && marksRows.length > 0) {
       const totalPossible = marksRows.length * 160;
@@ -54,8 +53,7 @@ export const getStudentProfile = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/dashboard
+
 export const getDashboard = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -140,8 +138,7 @@ export const getDashboard = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/marks-trend
+
 export const getMarksTrend = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -164,14 +161,13 @@ export const getMarksTrend = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/radar
+
 export const getRadarData = async (req, res) => {
   try {
     const { studentId } = req.user;
     const marks = await Marks.find({ studentId });
     
-    // Deduplicate marks: Take latest score per subject
+   
     const subjectMap = new Map();
     for (const m of marks) {
       const total = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);
@@ -189,8 +185,7 @@ export const getRadarData = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/attendance
+
 export const getAttendance = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -207,8 +202,7 @@ export const getAttendance = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/insights
+
 export const getInsights = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -227,8 +221,7 @@ export const getInsights = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/student/timeline
+
 export const getTimeline = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -285,8 +278,7 @@ export const getTimeline = async (req, res) => {
 export const getActivity = async (req, res) => {
   res.json({ assignmentSubmissionPct: 85, labCompletionPct: 90, participationScore: 75 });
 };
-
-// GET /api/student/goals
+
 export const getGoals = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -299,7 +291,7 @@ export const getGoals = async (req, res) => {
     const currentCgpa = insight?.cgpa || 0;
     const targetCgpa = goalDoc?.targetCgpa || user?.targetCgpa || 8.0;
     
-    // Status Logic
+   
     let status = 'on_track';
     if (currentCgpa < targetCgpa - 0.5) status = 'behind_pace';
     else if (currentCgpa < targetCgpa) status = 'at_risk';
@@ -318,8 +310,7 @@ export const getGoals = async (req, res) => {
     res.status(500).json({ error: 'Server error' }); 
   }
 };
-
-// POST /api/student/goals
+
 export const updateGoal = async (req, res) => {
   try {
     const { targetCgpa } = req.body;
@@ -358,18 +349,18 @@ export const getAchievements = async (req, res) => {
       Insight.find({ studentId }).lean()
     ]);
 
-    // Calculate streak from chat messages (simplified: count of unique days active in chat)
+   
     const dates = chatDoc?.messages?.map(m => m.timestamp.toISOString().split('T')[0]) || [];
     const streak = new Set(dates).size;
 
-    // Goals met: current CGPA >= target
+   
     const currentCgpa = insights.sort((a,b) => b.createdAt - a.createdAt)[0]?.cgpa || 0;
     const goalsMet = (goal && currentCgpa >= goal.targetCgpa) ? 1 : 0;
 
     res.json({ 
       streak, 
       goalsMet, 
-      quizzesCompleted: Math.floor(streak * 1.5) // Placeholder: derive from activity later if model exists
+      quizzesCompleted: Math.floor(streak * 1.5)
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch achievements' });
@@ -379,8 +370,7 @@ export const getAchievements = async (req, res) => {
 export const updateParentContact = async (req, res) => {
   res.json({ success: true, message: 'Contact updated' });
 };
-
-// GET /api/student/report/pdf
+
 export const downloadReport = async (req, res) => {
   let doc;
   try {
@@ -392,13 +382,13 @@ export const downloadReport = async (req, res) => {
 
     doc = new PDFDocument({ margin: 40, size: 'A4' });
 
-    // Set headers before piping
+   
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="SUTATE_Report_${studentId}.pdf"`);
 
     doc.pipe(res);
 
-    // Header Content
+   
     doc.fontSize(24).fillColor('#6366F1').font('Helvetica-Bold').text('SUTATE AI', { align: 'right' });
     doc.fontSize(10).fillColor('#64748b').text('University Smart Advisor System', { align: 'right' });
     doc.moveDown(2);
@@ -410,7 +400,7 @@ export const downloadReport = async (req, res) => {
     doc.rect(40, doc.y, 520, 2).fill('#e2e8f0');
     doc.moveDown();
 
-    // Student Info
+   
     doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Student Information');
     doc.fontSize(11).fillColor('#333').font('Helvetica');
     doc.text(`Name: ${user?.name || studentId}`);
@@ -418,7 +408,7 @@ export const downloadReport = async (req, res) => {
     doc.text(`Department: ${user?.department || 'N/A'}`);
     doc.moveDown();
 
-    // Academic Stats
+   
     if (insight) {
       doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Academic Summary');
       doc.fontSize(11).fillColor('#333');
@@ -428,7 +418,7 @@ export const downloadReport = async (req, res) => {
       doc.moveDown();
     }
 
-    // Attendance
+   
     doc.fontSize(14).fillColor('#6366F1').font('Helvetica-Bold').text('Attendance Statistics');
     doc.fontSize(10).fillColor('#333');
     for (const a of attendance) {
@@ -436,17 +426,17 @@ export const downloadReport = async (req, res) => {
     }
     doc.moveDown();
 
-    // Footer
+   
     doc.fontSize(8).fillColor('#94a3b8').text('This is an AI-generated academic report. For official purposes, please consult the university registrar.', { align: 'center', bottom: 40 });
 
     doc.end();
   } catch (err) {
     console.error('[PDF] Student report error:', err);
-    // If headers haven't been sent, we can send a JSON error
+   
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to generate PDF report' });
     } else {
-      // If stream is already piping, we just end it
+     
       if (doc) doc.end();
       res.end();
     }
@@ -468,8 +458,7 @@ export const getChatHistory = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 };
-
-// POST /api/student/chat
+
 export const chatWithAI = async (req, res) => {
   try {
     const { studentId, userId } = req.user;
@@ -514,7 +503,7 @@ Respond helpfully and encouragingly in 2-4 sentences. Be specific to their data.
       reply = await callGemini(contextPrompt, { maxTokens: 400 });
     } catch (geminiErr) {
       console.error('[Chat] Gemini error:', geminiErr);
-      reply = `Based on your latest data, your current risk is ${insight?.dropoutTier || insight?.riskLevel || 'LOW'} and CGPA is ${insight?.cgpa || 'N/A'}. Keep attendance above 80% and focus on weak subjects this week.`;
+      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });
     }
 
     const newMessages = [
@@ -553,8 +542,7 @@ Respond helpfully and encouragingly in 2-4 sentences. Be specific to their data.
     res.status(500).json({ error: 'AI chat failed: ' + err.message });
   }
 };
-
-// POST /api/student/quiz/generate
+
 export const generateQuiz = async (req, res) => {
   try {
     const { subject } = req.body;
@@ -563,7 +551,7 @@ export const generateQuiz = async (req, res) => {
     const { callGemini, parseGeminiJSON } = await import('../services/geminiService.js');
     const { getRandomQuestions } = await import('../data/questionBank.js');
 
-    // Generate a unique seed every request to ensure different questions
+   
     const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const topicVariants = [
       'fundamentals and core concepts',
@@ -592,7 +580,7 @@ Return ONLY a valid JSON array with no extra text, no markdown, no code fences:
 
 The correctIndex is 0-based (0 for first option, 3 for last).`;
 
-    // Try Gemini first with high temperature for variety
+   
     let reply = null;
     try {
       const raw = await callGemini(dynamicPrompt, { maxTokens: 1500, temperature: 0.9 });
@@ -601,7 +589,7 @@ The correctIndex is 0-based (0 for first option, 3 for last).`;
       console.warn('[Quiz] Gemini generation failed:', parseErr.message);
     }
 
-    // Validate the Gemini response
+   
     if (Array.isArray(reply) && reply.length >= 3) {
       const validQuestions = reply.filter(q => 
         q && typeof q.question === 'string' && 
@@ -617,7 +605,7 @@ The correctIndex is 0-based (0 for first option, 3 for last).`;
       }
     }
 
-    // Fallback: use subject-specific question bank (always different due to random shuffle)
+   
     console.warn('[Quiz] Using question bank fallback for:', subject);
     const fallback = getRandomQuestions(subject, 5);
     res.json({ reply: fallback });
@@ -626,8 +614,7 @@ The correctIndex is 0-based (0 for first option, 3 for last).`;
     res.status(500).json({ error: 'Quiz generation failed: ' + err.message });
   }
 };
-
-// GET /api/student/longitudinal
+
 export const getLongitudinalData = async (req, res) => {
   try {
     if (!global.dbConnected) {
@@ -662,8 +649,7 @@ export const getLongitudinalData = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
-};
-// GET or POST /api/student/study-plan
+};
 export const getStudyPlan = async (req, res) => {
   try {
     const { studentId } = req.user;
@@ -671,7 +657,7 @@ export const getStudyPlan = async (req, res) => {
     if (!insight) return res.json({ plan: [] });
 
     const marks = await Marks.find({ studentId });
-    const customSubjects = req.body?.subjects; // [{ subject, examDate, hoursPerDay }]
+    const customSubjects = req.body?.subjects;
     
     const today = new Date();
     const todayStr = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -707,8 +693,8 @@ Return exactly this JSON format: {"plan":[{"week":1,"startDate":"${todayStr}","e
     try {
       planData = await callGeminiJSON(prompt, fallback);
     } catch (geminiErr) {
-      console.warn('[StudyPlan] Gemini failed, using fallback:', geminiErr.message);
-      planData = fallback;
+      console.error('[StudyPlan] Gemini failed:', geminiErr.message);
+      return res.status(500).json({ error: 'Failed to generate study plan: ' + geminiErr.message });
     }
     res.json(planData?.plan ? planData : fallback);
   } catch (err) {

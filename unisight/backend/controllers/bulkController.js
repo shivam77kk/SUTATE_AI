@@ -17,8 +17,7 @@ function parseCSV(buffer) {
     return obj;
   });
 }
-
-// POST /api/admin/bulk/users
+
 export const bulkImportUsers = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'CSV file required' });
@@ -60,8 +59,7 @@ export const bulkImportUsers = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/bulk/logs
+
 export const getBulkImportLogs = async (req, res) => {
   try {
     const logs = await BulkImportLog.find().sort({ createdAt: -1 }).limit(20).lean();

@@ -21,8 +21,7 @@ Write ONE specific improvement sentence (max 25 words) telling them exactly what
 
   return { projectedCgpa: currentCgpa, onTrack, requiredActions };
 }
-
-// GET /api/goals
+
 export const getGoal = async (req, res) => {
   try {
     const goal = await StudentGoal.findOne({ studentId: req.user.studentId });
@@ -42,8 +41,7 @@ export const getGoal = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/goals
+
 export const setGoal = async (req, res) => {
   try {
     const { targetCgpa, semester, academicYear } = req.body;

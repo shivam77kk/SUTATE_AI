@@ -1,8 +1,7 @@
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-
-// POST /api/auth/login
+
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -57,14 +56,12 @@ export const login = async (req, res) => {
     res.status(500).json({ error: 'Server error during login' });
   }
 };
-
-// POST /api/auth/logout
+
 export const logout = (req, res) => {
   res.clearCookie('token', { httpOnly: true, sameSite: 'lax', path: '/' });
   res.json({ message: 'Logged out successfully' });
 };
-
-// GET /api/auth/me
+
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
@@ -73,8 +70,7 @@ export const getMe = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
-};
-// POST /api/auth/change-password
+};
 export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;

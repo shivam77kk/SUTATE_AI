@@ -126,7 +126,7 @@ export const analyseCurriculum = async (_req, res) => {
 
     const analysisResults = analysis || fallback;
     
-    // Persist results to CurriculumFlag so they show up in getCurriculum
+   
     for (const resItem of analysisResults) {
       await CurriculumFlag.findOneAndUpdate(
         { subject: resItem.subject, department: resItem.department },
@@ -204,7 +204,7 @@ export const runCurriculumAnalysis = async (req, res) => {
       
       RULES:
       1. Return ONLY a valid JSON array of objects.
-      2. NO comments (// or /*) inside JSON.
+      2. NO comments 
       3. NO trailing commas.
 
       Format:

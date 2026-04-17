@@ -19,8 +19,8 @@ export const submitFeedback = async (req, res) => {
       responses: processedResponses
     });
     
-    // Potentially update CurriculumFlag if avg difficulty is high 
-    // We do this in curriculumController analysis normally, but we can fast path it.
+   
+   
 
     res.json({ message: 'Feedback submitted. Thank you.' });
   } catch (err) {
@@ -76,7 +76,7 @@ export const getClassFeedbackSummary = async (req, res) => {
       }
     }
 
-    // Flags array
+   
     const flags = await CurriculumFlag.find({ 
       subject: { $in: Object.keys(subjectMap) }, 
       flagSeverity: { $in: ['critical', 'concern'] } 
@@ -93,7 +93,7 @@ export const getClassFeedbackSummary = async (req, res) => {
       isFlaggedAsCurriculumIssue: flaggedSubjects.includes(sMap.subject)
     }));
 
-    // assuming standard class size approx 60
+   
     const overallResponseRate = Math.min(100, Math.round((feedbacks.length / 60) * 100));
 
     res.json({ subjects: subjectsArray, overallResponseRate, responseCount: feedbacks.length });

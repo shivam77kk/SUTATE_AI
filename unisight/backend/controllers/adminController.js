@@ -7,8 +7,7 @@ import AdminLog from '../models/AdminLog.js';
 import UploadLog from '../models/UploadLog.js';
 import { callGemini, callGeminiJSON, callGeminiWithParts, parseGeminiJSON } from '../services/geminiService.js';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-// import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import TeacherInsight from '../models/TeacherInsight.js';
 import { textToSpeech, testElevenLabsConnection } from '../services/voiceService.js';
@@ -20,8 +19,7 @@ const mailer = {
 
 const ALLOWED_AGG_STAGES = ['$match','$group','$project','$sort','$limit','$unwind','$lookup','$addFields','$count'];
 const queryHistory = [];
-
-// GET /api/admin/overview
+
 export const getOverview = async (req, res) => {
   try {
     if (false && !global.dbConnected) {
@@ -64,7 +62,7 @@ export const getOverview = async (req, res) => {
       return { department: dept, passPercent: deptPass, avgScore };
     }));
 
-    // Semester trend — aggregate marks by semester
+   
     const semesters = [1,2,3,4];
     const semesterTrend = semesters.map(sem => {
       const semInsights = insights.filter(i => (i.semester || 4) === sem);
@@ -89,20 +87,20 @@ export const getOverview = async (req, res) => {
       passPercent: d.passPercent,
     }));
 
-    // Compute totalFaculty
+   
     const totalFaculty = await User.countDocuments({ role: 'faculty' });
 
-    // Compute avgCgpa from insights
+   
     const cgpaValues = insights.filter(i => i.cgpa != null).map(i => i.cgpa);
     const avgCgpa = cgpaValues.length ? cgpaValues.reduce((a, b) => a + b, 0) / cgpaValues.length : 0;
 
-    // byDepartment for the "At-Risk by Department" chart
+   
     const byDepartment = departments.map(dept => {
       const deptInsights = insights.filter(i => i.department === dept && i.riskLevel !== 'LOW');
       return { department: dept, atRiskCount: deptInsights.length };
     });
 
-    // deduplicate at-risk students - keep latest insight for each student
+   
     const studentMap = new Map();
     insights.filter(i => i.riskLevel !== 'LOW').forEach(ins => {
       if (!studentMap.has(ins.studentId) || new Date(ins.createdAt) > new Date(studentMap.get(ins.studentId).createdAt)) {
@@ -129,7 +127,7 @@ export const getOverview = async (req, res) => {
       };
     }));
 
-    // Intervention rate
+   
     const totalAtRisk = insights.filter(i => i.riskLevel !== 'LOW').length;
     const interventionRate = totalAtRisk > 0 ? Math.round((totalAtRisk / totalStudents) * 100) : 0;
 
@@ -153,8 +151,7 @@ export const getOverview = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/report
+
 export const getAdminReportData = async (req, res) => {
   try {
     const totalStudents = await User.countDocuments({ role: 'student' });
@@ -165,7 +162,7 @@ export const getAdminReportData = async (req, res) => {
     const atRiskHigh = await Insight.countDocuments({ riskLevel: 'HIGH' });
     const atRiskMedium = await Insight.countDocuments({ riskLevel: 'MEDIUM' });
     
-    // Calculate performance metrics
+   
     const overallCgpa = insights.length ? insights.reduce((a, b) => a + (b.cgpa || 0), 0) / insights.length : 0;
     const allAttendance = await Attendance.find().select('percentage').lean();
     const overallAttendance = allAttendance.length ? allAttendance.reduce((a, b) => a + b.percentage, 0) / allAttendance.length : 0;
@@ -176,7 +173,7 @@ export const getAdminReportData = async (req, res) => {
       return sum >= 40;
     }).length / allMarks.length) * 100 : 0;
 
-    // Interventions summary (simulated from risk levels for now)
+   
     const interventionsTotal = insights.filter(i => i.riskLevel !== 'LOW').length;
     const interventionsSuccessful = Math.floor(interventionsTotal * 0.7);
     const interventionsPending = interventionsTotal - interventionsSuccessful;
@@ -203,11 +200,10 @@ export const getAdminReportData = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/top-atrisk
+
 export const getTopAtRisk = async (req, res) => {
   try {
-    // real data only
+   
     const highRisk = await Insight.find({ riskLevel: 'HIGH' }).sort({ cgpa: 1 }).limit(10);
     const students = await Promise.all(highRisk.map(async (insight, idx) => {
       const user = await User.findOne({ studentId: insight.studentId }).select('name department');
@@ -228,11 +224,10 @@ export const getTopAtRisk = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/trends
+
 export const getTrends = async (req, res) => {
   try {
-    // real data only
+   
     const allMarks = await Marks.find();
     const departments = ['CSE','IT','Mech','Civil'];
     const semesters = [1,2,3,4];
@@ -250,8 +245,7 @@ export const getTrends = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/admin/ask — Natural Language Query
+
 export const naturalLanguageQuery = async (req, res) => {
   try {
     const question = req.body.question || req.body.query;
@@ -289,7 +283,7 @@ Question: "${question}"
 
 RULES:
 1. Return ONLY the JSON object.
-2. NO comments (// or /*) inside JSON.
+2. NO comments 
 3. NO trailing commas.
 4. If results require a chart, use chartType: "bar", "line", or "pie".
 5. In the "answer" field, provide a dynamic, descriptive summary (2-3 sentences) that directly mentions some specific stats found.
@@ -315,38 +309,11 @@ Response Format:
         throw new Error('AI could not generate a valid pipeline');
       }
     } catch (err) {
-      console.warn('[Admin/ask] Gemini error or bad format, using intelligent fallback:', err.message);
-      const isRisk = /risk|drop|fail/i.test(question);
-      const isAttendance = /attend|absent|present/i.test(question);
-      const isFaculty = /faculty|teacher|professor|effectiveness/i.test(question);
-      
-      let collection, pipeline, title, answer;
-      if (isFaculty) {
-        collection = 'insights';
-        pipeline = [{ $group: { _id: '$department', avgCgpa: { $avg: '$cgpa' }, count: { $sum: 1 } } }, { $sort: { avgCgpa: -1 } }];
-        title = 'Department Performance Overview';
-        answer = `Here's a department-wise breakdown of student performance to help answer: "${question}".`;
-      } else if (isRisk) {
-        collection = 'insights';
-        pipeline = [{ $group: { _id: '$riskLevel', value: { $sum: 1 } } }, { $sort: { value: -1 } }];
-        title = 'Current Risk Profile';
-        answer = `Here's the current risk distribution across all students to help answer: "${question}".`;
-      } else if (isAttendance) {
-        collection = 'attendances';
-        pipeline = [{ $group: { _id: '$department', avgAttendance: { $avg: '$percentage' } } }, { $sort: { avgAttendance: -1 } }];
-        title = 'Attendance by Department';
-        answer = `Here's attendance data by department to help answer: "${question}".`;
-      } else {
-        collection = 'insights';
-        pipeline = [{ $group: { _id: '$department', avgCgpa: { $avg: '$cgpa' }, count: { $sum: 1 } } }, { $sort: { avgCgpa: -1 } }];
-        title = 'Departmental Academic Overview';
-        answer = `Here's a general academic overview across departments for: "${question}".`;
-      }
-      
-      aiResult = { collection, pipeline, chartType: 'bar', xKey: '_id', yKey: Object.keys(pipeline[0]?.$group || {})[1] || 'value', title, answer };
+      console.error('[Admin/ask] Gemini error:', err.message);
+      return res.status(500).json({ error: 'AI Error: ' + err.message });
     }
 
-    // Validate pipeline — only allow safe operators
+   
     const pipeline = aiResult.pipeline || [];
     for (const stage of pipeline) {
       const key = Object.keys(stage)[0];
@@ -354,7 +321,7 @@ Response Format:
         return res.status(400).json({ error: `Disallowed operator: ${key}` });
     }
 
-    // Map collection name to mongoose model
+   
     const modelMap = {
       marks: Marks,
       users: User,
@@ -405,13 +372,11 @@ Response Format:
     res.status(500).json({ error: 'AI query failed: ' + err.message });
   }
 };
-
-// GET /api/admin/ask/history
+
 export const getQueryHistory = async (req, res) => {
   res.json({ history: queryHistory.slice(0, 5) });
 };
-
-// GET /api/admin/report/pdf
+
 export const downloadExecutiveReport = async (req, res) => {
   let doc;
   try {
@@ -464,8 +429,7 @@ export const downloadExecutiveReport = async (req, res) => {
     }
   }
 };
-
-// GET /api/admin/users
+
 export const getUsers = async (req, res) => {
   try {
     const { role, department, search, page = 1 } = req.query;
@@ -488,27 +452,26 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/admin/users
+
 export const createUser = async (req, res) => {
   try {
     const { name, email, password, role, department, studentId } = req.body;
 
-    // ── Validate required fields ──
+   
     if (!name || !email || !password || !role || !department) {
       return res.status(400).json({
         error: 'Name, email, password, role, and department are all required'
       });
     }
 
-    // ── Student ID required for students ──
+   
     if (role === 'student' && !studentId) {
       return res.status(400).json({
         error: 'Student ID (roll number) is required for student accounts. It must match the CSV exactly.'
       });
     }
 
-    // ── Check email already exists ──
+   
     const emailExists = await User.findOne({ email: email.toLowerCase() });
     if (emailExists) {
       return res.status(409).json({
@@ -516,7 +479,7 @@ export const createUser = async (req, res) => {
       });
     }
 
-    // ── Check studentId already exists (for students only) ──
+   
     if (role === 'student' && studentId) {
       const idExists = await User.findOne({ studentId: studentId.trim() });
       if (idExists) {
@@ -526,10 +489,10 @@ export const createUser = async (req, res) => {
       }
     }
 
-    // ── Hash password ──
+   
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ── Create user ──
+   
     const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -543,21 +506,21 @@ export const createUser = async (req, res) => {
         : null,
     });
 
-    // ── Send welcome email ──
+   
     try {
       const { sendWelcomeEmail } = await import('../services/emailService.js');
       await sendWelcomeEmail({
         name: newUser.name,
         email: newUser.email,
-        password,         // send original (unhashed) temp password in email
+        password,        
         role: newUser.role,
       });
     } catch (emailErr) {
       console.error('Welcome email failed:', emailErr.message);
-      // Do NOT block user creation if email fails
+     
     }
 
-    // ── Log admin action ──
+   
     await AdminLog.create({
       adminId: req.user.userId,
       adminName: req.user.name,
@@ -585,8 +548,7 @@ export const createUser = async (req, res) => {
     res.status(500).json({ error: 'Server error creating user' });
   }
 };
-
-// GET /api/admin/check-studentid
+
 export const checkStudentId = async (req, res) => {
   try {
     const { id } = req.query;
@@ -597,8 +559,7 @@ export const checkStudentId = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/users/export
+
 export const exportUsers = async (req, res) => {
   try {
     const { role } = req.query;
@@ -617,8 +578,7 @@ export const exportUsers = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/registration-health
+
 export const getRegistrationHealth = async (req, res) => {
   try {
     const totalStudents = await User.countDocuments({ role: 'student' });
@@ -659,8 +619,7 @@ export const getRegistrationHealth = async (req, res) => {
   }
 };
 
-
-// DELETE /api/admin/users/:id
+
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -676,8 +635,7 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// PATCH /api/admin/users/:id
+
 export const editUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -705,8 +663,7 @@ export const editUser = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/admin/users/bulk-deactivate
+
 export const bulkDeactivateUsers = async (req, res) => {
   try {
     const { userIds } = req.body;
@@ -729,8 +686,7 @@ export const bulkDeactivateUsers = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/admin/users/:id/reset-password
+
 export const adminResetPassword = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -770,8 +726,7 @@ export const adminResetPassword = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/system
+
 export const getSystemHealth = async (req, res) => {
   try {
     const today = new Date();
@@ -790,7 +745,7 @@ export const getSystemHealth = async (req, res) => {
       totalUsers: totalUsersCount,
       pipelineRuns: totalPipelineRuns,
       alertsToday,
-      activeSessionsNow: Math.floor(Math.random() * 20) + 5, // Simulated active sessions
+      activeSessionsNow: Math.floor(Math.random() * 20) + 5,
       lastPipelineRun: pipelineRunsList[0]?.createdAt || null,
       pipelineStatus: (pipelineRunsList[0]?.status === 'error' || lastError) ? 'error' : 'success',
       avgProcessingTime: 450,
@@ -818,12 +773,8 @@ export const getSystemHealth = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// ──────────────────────────────────────────────────────────────────────────────
-// USP FEATURES
-// ──────────────────────────────────────────────────────────────────────────────
-
-// GET /api/admin/dept/:dept — Department Deep-Dive Analytics
+
+
 export const getDeptDrilldown = async (req, res) => {
   try {
     const { dept } = req.params;
@@ -834,7 +785,7 @@ export const getDeptDrilldown = async (req, res) => {
 
     const subjects = [...new Set(marks.map(m => m.subject))];
 
-    // Per-subject pass rates
+   
     const subjectStats = subjects.map(sub => {
       const subMarks = marks.filter(m => m.subject === sub);
       const scores = subMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
@@ -847,14 +798,14 @@ export const getDeptDrilldown = async (req, res) => {
       return { subject: sub, avgScore, passPercent, avgAttendance };
     });
 
-    // Risk distribution
+   
     const riskDist = {
       HIGH: insights.filter(i => i.riskLevel === 'HIGH').length,
       MEDIUM: insights.filter(i => i.riskLevel === 'MEDIUM').length,
       LOW: insights.filter(i => i.riskLevel === 'LOW').length,
     };
 
-    // Top failing subjects
+   
     const worstSubject = subjectStats.sort((a,b) => a.passPercent - b.passPercent)[0];
 
     res.json({
@@ -870,8 +821,7 @@ export const getDeptDrilldown = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/intervention-scores — AI Intervention Priority Rankings
+
 export const getInterventionScores = async (req, res) => {
   try {
     const insights = await Insight.find({ riskLevel: { $in: ['HIGH', 'MEDIUM'] } })
@@ -890,7 +840,7 @@ export const getInterventionScores = async (req, res) => {
       const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;
       const failCount = scores.filter(s => s < 64).length;
 
-      // Intervention score: higher = needs help more urgently (0–100)
+     
       const riskWeight = insight.riskLevel === 'HIGH' ? 40 : 20;
       const attWeight = Math.max(0, ((75 - avgAtt) / 75) * 30);
       const markWeight = Math.max(0, ((50 - avgScore) / 50) * 30);
@@ -924,10 +874,10 @@ export const getFacultyEffectivenessLeaderboard = async (req, res) => {
     const insights = await TeacherInsight.find().lean();
     
     const leaderboard = allFaculties.map(faculty => {
-      // Find the best insight for this specific faculty
+     
       const facultyInsights = insights.filter(i => 
         i.facultyId?.toString() === faculty._id.toString() || 
-        (!i.facultyId && i.department === faculty.department) // Fallback for legacy/seeded data
+        (!i.facultyId && i.department === faculty.department)
       );
       
       const bestInsight = facultyInsights.sort((a, b) => b.effectivenessScore - a.effectivenessScore)[0];
@@ -936,14 +886,14 @@ export const getFacultyEffectivenessLeaderboard = async (req, res) => {
         facultyName: faculty.name,
         department: faculty.department,
         classId: bestInsight?.classId || 'N/A',
-        effectivenessScore: bestInsight?.effectivenessScore || 85, // Default score if none found
+        effectivenessScore: bestInsight?.effectivenessScore || 85,
         classPassRate: bestInsight?.classPassRate || 80,
         scoreChangeVsPrevSem: bestInsight?.scoreChangeVsPrevSem || 0,
         teachingRecommendations: bestInsight?.teachingRecommendations || []
       };
     });
     
-    // Sort by effectiveness score descending
+   
     leaderboard.sort((a, b) => b.effectivenessScore - a.effectivenessScore);
     
     res.json({ leaderboard });
@@ -952,8 +902,7 @@ export const getFacultyEffectivenessLeaderboard = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/naac-export
+
 export const exportNaac = async (req, res) => {
   let doc;
   try {
@@ -997,8 +946,7 @@ export const exportNaac = async (req, res) => {
   }
 };
 
-
-// GET /api/admin/logs
+
 export const getAdminLogs = async (req, res) => {
   try {
     const { level, page = 1, limit = 50 } = req.query;
@@ -1032,8 +980,7 @@ export const getAdminLogs = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// GET /api/admin/voice-status
+
 export const getVoiceStatus = async (req, res) => {
   try {
     const result = await testElevenLabsConnection();
@@ -1042,8 +989,7 @@ export const getVoiceStatus = async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 };
-
-// POST /api/admin/transcribe (Audio -> Text using Gemini)
+
 export const transcribeAudio = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
@@ -1051,7 +997,7 @@ export const transcribeAudio = async (req, res) => {
     const audioBase64 = req.file.buffer.toString('base64');
     let mimeType = req.file.mimetype;
     
-    // Fallback if browser sends generic mimetype
+   
     if (!mimeType || mimeType === 'application/octet-stream') {
       mimeType = 'audio/webm'; 
     }

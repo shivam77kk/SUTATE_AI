@@ -3,8 +3,7 @@ import mongoose from 'mongoose';
 import fs from 'fs';
 import dotenv from 'dotenv';
 dotenv.config();
-
-// Force Google DNS to bypass ISP DNS that may block SRV record lookups
+
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 const uri = process.env.MONGODB_URI;

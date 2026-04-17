@@ -1,14 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-// import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import User from '../models/User.js';
 
 const transporter = {
   sendMail: async () => { console.log('[Mailer Stub] Password email sent'); }
 };
-
-// POST /api/password/change-first — change password on first login
+
 export const changeFirstPassword = async (req, res) => {
   try {
     const { newPassword, confirmPassword } = req.body;
@@ -25,7 +23,7 @@ export const changeFirstPassword = async (req, res) => {
     user.isFirstLogin = false;
     await user.save();
 
-    // Issue new JWT with isFirstLogin: false
+   
     const token = jwt.sign(
       { userId: user._id, role: user.role, department: user.department,
         studentId: user.studentId, name: user.name, isFirstLogin: false },
@@ -44,18 +42,17 @@ export const changeFirstPassword = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/password/forgot
+
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email: email?.toLowerCase() });
-    // Always return success to avoid revealing if email exists
+   
     if (!user) return res.json({ message: 'If this email exists, a reset link has been sent.' });
 
     const token = crypto.randomUUID();
     user.resetToken = token;
-    user.resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+    user.resetTokenExpiry = new Date(Date.now() + 3600000);
     await user.save();
 
     const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
@@ -77,8 +74,7 @@ export const forgotPassword = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-// POST /api/password/reset/:token
+
 export const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
