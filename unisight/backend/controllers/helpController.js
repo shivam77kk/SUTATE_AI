@@ -53,8 +53,9 @@ export const submitRequest = async (req, res) => {
     }
 
     res.status(201).json({ message: 'Help request submitted', helpRequestId: request._id });
-  } catch {
-    res.status(500).json({ error: 'Failed to submit request' });
+  } catch (err) {
+    console.error('Help Request Error:', err);
+    res.status(500).json({ error: 'Failed to submit request', details: err.message });
   }
 };
 

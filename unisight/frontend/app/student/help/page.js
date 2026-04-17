@@ -21,14 +21,14 @@ export default function HelpPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: () => api.post('/help-requests/request', { subject: form.subject, description: form.description, urgency: form.urgent ? 'urgent' : 'general' }),
+    mutationFn: () => api.post('/help-requests/request', { category: form.category, subject: form.subject, description: form.description, urgency: form.urgent ? 'urgent' : 'general' }),
     onSuccess: () => {
       qc.invalidateQueries(['my-help-requests']);
       setForm({ category: '', subject: '', description: '', urgent: false });
       setTab('requests');
       toast.success('Help request submitted ✓');
     },
-    onError: () => toast.error('Failed to submit request'),
+    onError: (err) => toast.error(err.response?.data?.details || err.response?.data?.error || 'Failed to submit request'),
   });
 
   return (
