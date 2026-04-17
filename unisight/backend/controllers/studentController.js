@@ -95,21 +95,46 @@ export const getDashboard = async (req, res) => {
     }
     const { studentId } = req.user;
     const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
-    if (!insight) return res.json({ cgpa: 0, dropoutProbability: 0, dropoutTier: 'LOW', recommendations: [] });
+    if (!insight) return res.json({ cgpa: 0, dropoutProbability: 0, dropoutTier: 'LOW', recommendations: [], riskReason: null });
     const attendanceRows = await Attendance.find({ studentId });
     const avgAttendance = attendanceRows.length
       ? Math.round(attendanceRows.reduce((sum, row) => sum + (row.percentage || 0), 0) / attendanceRows.length)
       : 0;
 
+    const marksRows = await Marks.find({ studentId });
+    const subjects = [...new Set(marksRows.map(m => m.subject))];
+    const exams = ['UT1', 'MidSem', 'UT2', 'EndSem'];
+    const scoreKeys = ['ut1', 'midSem', 'ut2', 'endSem'];
+    const marksTrend = exams.map((exam, i) => {
+      const row = { exam };
+      for (const sub of subjects) {
+        const m = marksRows.find(mk => mk.subject === sub);
+        row[sub] = m ? (m.scores[scoreKeys[i]] || 0) : 0;
+      }
+      return row;
+    });
+
+    const subjectMarks = marksRows.map(m => {
+      const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);
+      return { subject: m.subject, score: Math.round((total/160)*100), avg: Math.round((total/160)*70) };
+    });
+
+    const totalStudents = await User.countDocuments({ role: 'student', department: req.user.department });
     const dropoutProbability = insight.dropoutProbabilityScore ?? insight.dropoutProbability ?? 0;
     res.json({
       cgpa: insight.cgpa || 0,
       avgAttendance,
       classRank: insight.classRank || null,
+      totalStudents,
       dropoutProbability: dropoutProbability === 0 ? 12 : dropoutProbability,
       dropoutTier: insight.dropoutTier || insight.riskLevel || 'LOW',
+      riskReason: insight.riskReason || null,
       recommendations: insight.recommendations || [],
       classId: insight.classId,
+      semester: insight.semester || 4,
+      lastAnalysedAt: insight.generatedAt || insight.createdAt,
+      marksTrend: { subjects, data: marksTrend },
+      subjectMarks,
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -678,7 +703,13 @@ Return exactly this JSON format: {"plan":[{"week":1,"startDate":"${todayStr}","e
       ],
     };
 
-    const planData = await callGeminiJSON(prompt, fallback);
+    let planData;
+    try {
+      planData = await callGeminiJSON(prompt, fallback);
+    } catch (geminiErr) {
+      console.warn('[StudyPlan] Gemini failed, using fallback:', geminiErr.message);
+      planData = fallback;
+    }
     res.json(planData?.plan ? planData : fallback);
   } catch (err) {
     console.error('[StudyPlan] Error:', err);

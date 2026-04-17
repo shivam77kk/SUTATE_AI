@@ -5,7 +5,7 @@ import Insight from '../models/Insight.js';
 import Alert from '../models/Alert.js';
 import AdminLog from '../models/AdminLog.js';
 import UploadLog from '../models/UploadLog.js';
-import { callGeminiJSON, callGeminiWithParts } from '../services/geminiService.js';
+import { callGemini, callGeminiJSON, callGeminiWithParts, parseGeminiJSON } from '../services/geminiService.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 // import nodemailer from 'nodemailer';
@@ -308,29 +308,42 @@ Response Format:
 
     let aiResult;
     try {
-      aiResult = await callGeminiJSON(prompt, {
-        temperature: 0.7,
-        maxTokens: 1000,
-      });
+      const rawText = await callGemini(prompt, { maxTokens: 1000, temperature: 0.7 });
+      aiResult = parseGeminiJSON(rawText);
       
       if (!aiResult || !aiResult.pipeline) {
         throw new Error('AI could not generate a valid pipeline');
       }
     } catch (err) {
       console.warn('[Admin/ask] Gemini error or bad format, using intelligent fallback:', err.message);
-      // Dynamic fallback based on question keywords
       const isRisk = /risk|drop|fail/i.test(question);
-      aiResult = {
-        collection: isRisk ? 'insights' : 'marks',
-        pipeline: isRisk 
-          ? [ { $group: { _id: '$riskLevel', value: { $sum: 1 } } }, { $sort: { value: -1 } } ]
-          : [ { $group: { _id: '$department', value: { $avg: '$cgpa' } } } ],
-        chartType: 'bar',
-        xKey: '_id',
-        yKey: 'value',
-        title: isRisk ? 'Current Risk Profile' : 'Departmental Average',
-        answer: `I had trouble generating a custom query for "${question}", so I've retrieved a general overview of ${isRisk ? 'at-risk students' : 'academic performance'} across departments for you.`,
-      };
+      const isAttendance = /attend|absent|present/i.test(question);
+      const isFaculty = /faculty|teacher|professor|effectiveness/i.test(question);
+      
+      let collection, pipeline, title, answer;
+      if (isFaculty) {
+        collection = 'insights';
+        pipeline = [{ $group: { _id: '$department', avgCgpa: { $avg: '$cgpa' }, count: { $sum: 1 } } }, { $sort: { avgCgpa: -1 } }];
+        title = 'Department Performance Overview';
+        answer = `Here's a department-wise breakdown of student performance to help answer: "${question}".`;
+      } else if (isRisk) {
+        collection = 'insights';
+        pipeline = [{ $group: { _id: '$riskLevel', value: { $sum: 1 } } }, { $sort: { value: -1 } }];
+        title = 'Current Risk Profile';
+        answer = `Here's the current risk distribution across all students to help answer: "${question}".`;
+      } else if (isAttendance) {
+        collection = 'attendances';
+        pipeline = [{ $group: { _id: '$department', avgAttendance: { $avg: '$percentage' } } }, { $sort: { avgAttendance: -1 } }];
+        title = 'Attendance by Department';
+        answer = `Here's attendance data by department to help answer: "${question}".`;
+      } else {
+        collection = 'insights';
+        pipeline = [{ $group: { _id: '$department', avgCgpa: { $avg: '$cgpa' }, count: { $sum: 1 } } }, { $sort: { avgCgpa: -1 } }];
+        title = 'Departmental Academic Overview';
+        answer = `Here's a general academic overview across departments for: "${question}".`;
+      }
+      
+      aiResult = { collection, pipeline, chartType: 'bar', xKey: '_id', yKey: Object.keys(pipeline[0]?.$group || {})[1] || 'value', title, answer };
     }
 
     // Validate pipeline — only allow safe operators

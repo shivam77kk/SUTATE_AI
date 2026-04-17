@@ -6,88 +6,67 @@ const genAI = new GoogleGenerativeAI(
   process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
 );
 
-// ── Fallback model list (tried in order) ──────────────────────────────────
-const FALLBACK_MODELS = [
-  'gemini-2.0-flash-exp',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-];
+const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+let modelIndex = 0;
 
-let cachedModel = null;
+function getModel(generationConfig = {}) {
+  const name = MODELS[modelIndex % MODELS.length];
+  return { model: genAI.getGenerativeModel({ model: name, generationConfig }), name };
+}
 
-/**
- * Try each model in FALLBACK_MODELS until one responds.
- * The working model is cached so we don't re-test on every call.
- */
-async function getWorkingModel(generationConfig = {}) {
-  for (const modelName of FALLBACK_MODELS) {
-    try {
-      const m = genAI.getGenerativeModel({ model: modelName, generationConfig });
-      // Quick probe to see if the model is available
-      await m.generateContent('test');
-      console.log(`✅ [Gemini] Using model: ${modelName}`);
-      return m;
-    } catch (err) {
-      console.log(`⚠️ [Gemini] ${modelName} failed, trying next…`);
+function nextModel() {
+  modelIndex = (modelIndex + 1) % MODELS.length;
+}
+
+function extractRetryDelay(err) {
+  try {
+    const details = err?.errorDetails || [];
+    for (const d of details) {
+      if (d['@type']?.includes('RetryInfo') && d.retryDelay) {
+        const sec = parseInt(d.retryDelay);
+        if (!isNaN(sec) && sec > 0) return sec * 1000;
+      }
     }
-  }
-  throw new Error('❌ All Gemini fallback models failed');
+    const match = err?.message?.match(/retry in (\d+)/i);
+    if (match) return parseInt(match[1]) * 1000;
+  } catch {}
+  return 0;
 }
 
-async function getModel(generationConfig = {}) {
-  if (!cachedModel) {
-    cachedModel = await getWorkingModel(generationConfig);
-  }
-  return cachedModel;
-}
-
-/**
- * Retry with exponential backoff on rate-limit errors (429 / quota).
- */
-async function retryWithBackoff(fn, maxRetries = 3, initialDelay = 1000) {
-  let lastError;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      const isRateLimit =
-        err.message?.includes('quota') ||
-        err.message?.includes('rate limit') ||
-        err.message?.includes('429') ||
-        Number(err.status) === 429;
-
-      if (attempt === maxRetries || !isRateLimit) throw err;
-
-      const delay = initialDelay * Math.pow(2, attempt);
-      console.log(`[Gemini] Rate-limit hit — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-      await new Promise((r) => setTimeout(r, delay));
-
-      // Reset cached model so next attempt re-discovers a working one
-      cachedModel = null;
-    }
-  }
-  throw lastError;
-}
-
-// ── Public API ────────────────────────────────────────────────────────────
-
-/**
- * Call Gemini and return the raw text response.
- */
 export async function callGemini(prompt, { maxTokens = 800, temperature = 0.3 } = {}) {
-  const generationConfig = { maxOutputTokens: maxTokens, temperature };
-  return retryWithBackoff(async () => {
-    const m = await getModel(generationConfig);
-    const result = await m.generateContent(prompt);
-    return result.response.text();
-  });
+  const maxRetries = 4;
+  let lastErr;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const { model, name } = getModel({ maxOutputTokens: maxTokens, temperature });
+
+    try {
+      const result = await model.generateContent(prompt);
+      const text = result?.response?.text?.() ?? '';
+      if (!text.trim()) throw new Error('Empty response from Gemini');
+      console.log(`[Gemini Agent] ${name} responded OK`);
+      return text;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.status || 0;
+      console.warn(`[Gemini Agent] ${name} failed (${status || err.message?.substring(0, 80)})`);
+
+      if (status === 429) {
+        let delay = extractRetryDelay(err);
+        if (delay <= 0) delay = Math.min(60000, 5000 * Math.pow(2, attempt));
+        console.log(`[Gemini Agent] 429 rate-limit. Waiting ${Math.round(delay/1000)}s (attempt ${attempt+1}/${maxRetries})...`);
+        await new Promise(r => setTimeout(r, delay));
+        nextModel();
+        continue;
+      }
+
+      nextModel();
+    }
+  }
+
+  throw lastErr || new Error('All Gemini agent retries failed');
 }
 
-/**
- * Call Gemini and parse the response as JSON.
- */
 export async function callGeminiJSON(prompt) {
   const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1200 });
   const clean = text.replace(/```json|```/gi, '').trim();

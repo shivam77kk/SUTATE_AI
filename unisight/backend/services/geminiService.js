@@ -7,83 +7,106 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export const geminiQueue = new PQueue({
-  concurrency: 2,
+  concurrency: 1,
   interval: 60000,
-  intervalCap: 14,
+  intervalCap: 10,
 });
 
-const FALLBACK_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro-latest',
-  'gemini-1.5-flash-8b',
-];
-
-let model = null;
-let activeModelName = null;
+const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 let modelIndex = 0;
 
-function getModelByIndex(idx) {
-  const name = FALLBACK_MODELS[idx % FALLBACK_MODELS.length];
-  activeModelName = name;
-  return genAI.getGenerativeModel({ model: name });
+function getModel(generationConfig = {}) {
+  const name = MODELS[modelIndex % MODELS.length];
+  return { model: genAI.getGenerativeModel({ model: name, generationConfig }), name };
 }
 
-export async function getModel() {
-  if (!model) {
-    model = getModelByIndex(modelIndex);
-    console.log(`Gemini using model: ${activeModelName}`);
-  }
-  return model;
+function nextModel() {
+  modelIndex = (modelIndex + 1) % MODELS.length;
 }
 
-function advanceModel() {
-  modelIndex = (modelIndex + 1) % FALLBACK_MODELS.length;
-  model = null;
-  activeModelName = null;
+function extractRetryDelay(err) {
+  try {
+    const details = err?.errorDetails || [];
+    for (const d of details) {
+      if (d['@type']?.includes('RetryInfo') && d.retryDelay) {
+        const sec = parseInt(d.retryDelay);
+        if (!isNaN(sec) && sec > 0) return sec * 1000;
+      }
+    }
+    const match = err?.message?.match(/retry in (\d+)/i);
+    if (match) return parseInt(match[1]) * 1000;
+  } catch {}
+  return 0;
 }
 
 export async function callGemini(prompt, options = {}) {
   return geminiQueue.add(async () => {
+    const maxRetries = 4;
     let lastErr;
-    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const { model, name } = getModel({
+        maxOutputTokens: options.maxTokens ?? 800,
+        temperature: options.temperature ?? 0.3,
+      });
+
       try {
-        const workingModel = await getModel();
-        const result = await workingModel.generateContent({
+        const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: String(prompt) }] }],
-          generationConfig: {
-            maxOutputTokens: options.maxTokens ?? 800,
-            temperature: options.temperature ?? 0.3,
-          },
         });
         const text = result?.response?.text?.() ?? '';
-        if (!text.trim()) throw new Error('Empty response');
+        if (!text.trim()) throw new Error('Empty response from Gemini');
         return text;
       } catch (err) {
         lastErr = err;
-        console.warn(`Gemini [${activeModelName}] failed: ${err?.status || err?.message || 'unknown'}`);
-        advanceModel();
+        const status = err?.status || 0;
+        console.warn(`[Gemini] ${name} failed (${status || err.message?.substring(0, 80)})`);
+
+        if (status === 429) {
+          let delay = extractRetryDelay(err);
+          if (delay <= 0) delay = Math.min(60000, 5000 * Math.pow(2, attempt));
+          console.log(`[Gemini] 429 rate-limit. Waiting ${Math.round(delay/1000)}s (attempt ${attempt+1}/${maxRetries})...`);
+          await new Promise(r => setTimeout(r, delay));
+          nextModel();
+          continue;
+        }
+
+        if (status === 503 || status === 500) {
+          const delay = 3000 * (attempt + 1);
+          console.log(`[Gemini] Server error ${status}. Waiting ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          nextModel();
+          continue;
+        }
+
+        nextModel();
       }
     }
-    throw lastErr || new Error('All Gemini models failed');
+
+    throw lastErr || new Error('All Gemini retries failed');
   });
 }
 
 export async function callGeminiWithParts(parts, options = {}) {
   return geminiQueue.add(async () => {
+    const maxRetries = 3;
     let lastErr;
-    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const { model, name } = getModel();
       try {
-        const workingModel = await getModel();
-        const result = await workingModel.generateContent(parts);
+        const result = await model.generateContent(parts);
         const text = result?.response?.text?.() ?? '';
         return text;
       } catch (err) {
         lastErr = err;
-        console.warn(`Gemini Parts [${activeModelName}] failed: ${err?.status || err?.message || 'unknown'}`);
-        advanceModel();
+        console.warn(`[Gemini Parts] ${name} failed: ${err?.status || err?.message?.substring(0, 80)}`);
+        if (err?.status === 429) {
+          let delay = extractRetryDelay(err);
+          if (delay <= 0) delay = 10000 * (attempt + 1);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        nextModel();
       }
     }
     throw lastErr || new Error('All Gemini models failed for parts');
@@ -130,7 +153,8 @@ export async function callGeminiJSON(prompt, fallback = null) {
   try {
     const raw = await callGemini(prompt);
     return parseGeminiJSON(raw);
-  } catch {
+  } catch (err) {
+    console.warn('[GeminiJSON] Failed, returning fallback:', err.message?.substring(0, 100));
     return fallback;
   }
 }

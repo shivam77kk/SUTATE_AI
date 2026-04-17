@@ -379,8 +379,13 @@ export async function runPipeline({ csvRows, uploadId, classId, department, seme
 
     // ST004: Agent 5 Teaching Analyser
     emit('Teaching Analyser', 'running');
-    await runTeacherEffectivenessAgent({ facultyId, classId, department, semester, students: riskData });
-    emit('Teaching Analyser', 'complete');
+    try {
+      await runTeacherEffectivenessAgent({ facultyId, classId, department, semester, students: riskData });
+      emit('Teaching Analyser', 'complete');
+    } catch (teacherErr) {
+      console.warn('[Pipeline] Teaching Analyser failed (non-fatal):', teacherErr.message);
+      emit('Teaching Analyser', 'skipped');
+    }
 
     const durationMs = Date.now() - startTime;
     const studentCount = insights.length;

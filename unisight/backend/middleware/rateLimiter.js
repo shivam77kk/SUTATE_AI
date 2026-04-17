@@ -9,6 +9,6 @@ export const apiLimiter = rateLimit({
 
 export const geminiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
+  max: 15,
   message: { error: 'AI rate limit reached. Please wait 1 minute.' },
 });

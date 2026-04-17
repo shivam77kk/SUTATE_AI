@@ -103,7 +103,13 @@ Student data:
 
 Write a 150-200 word email that is warm but firm, explaining the concern and requesting them to take corrective action. Include a subject line at the top.`;
 
-    const emailText = await callGemini(prompt, { maxTokens: 400 });
+    let emailText;
+    try {
+      emailText = await callGemini(prompt, { maxTokens: 400 });
+    } catch (geminiErr) {
+      console.warn('[SendAlert] Gemini failed, using template fallback:', geminiErr.message);
+      emailText = `Subject: Academic Performance Alert — ${studentId}\n\nDear ${student?.name || studentId},\n\nThis is to inform you that our academic monitoring system has flagged your performance as needing attention.\n\nRisk Level: ${insight?.riskLevel || 'MEDIUM'}\nReason: ${insight?.riskReason || 'Performance indicators suggest room for improvement'}\nMarks: ${marksSummary || 'No marks data available'}\nAttendance: ${attSummary || 'No attendance data available'}\n\nWe encourage you to meet with your faculty advisor to discuss strategies for improvement. Remember, seeking help early is a sign of strength.\n\nBest regards,\nYour Faculty`;
+    }
 
     // Log the alert
     await Alert.create({
@@ -549,8 +555,20 @@ Write as if speaking aloud. Natural sentences. No bullet points. No markdown.
 Start with: "Here is your class summary."
 `;
 
-    const summary = await callGemini(prompt, { maxTokens: 100, temperature: 0.3 });
-    const audioData = await textToSpeech(summary);
+    let summary;
+    try {
+      summary = await callGemini(prompt, { maxTokens: 100, temperature: 0.3 });
+    } catch (geminiErr) {
+      console.warn('[VoiceSummary] Gemini failed, using template:', geminiErr.message);
+      summary = `Here is your class summary. You have ${total} students in this class, with ${atRisk} at high risk. ${passing} students are currently passing, and the average CGPA is ${avgCgpa}. ${atRisk > 0 ? 'Some students need immediate attention.' : 'Overall performance looks good.'}`;
+    }
+
+    let audioData = null;
+    try {
+      audioData = await textToSpeech(summary);
+    } catch (voiceErr) {
+      console.warn('[VoiceSummary] TTS failed:', voiceErr.message);
+    }
 
     res.json({
       summary,
