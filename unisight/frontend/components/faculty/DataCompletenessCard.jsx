@@ -1,1 +1,93 @@
-'use client';import { useQuery } from '@tanstack/react-query';import api from '@/lib/axios';import { Database, AlertCircle, FileCheck, Info } from 'lucide-react';export default function DataCompletenessCard() {  const { data, isLoading } = useQuery({    queryKey: ['faculty-data-completeness'],    queryFn: () => api.get('/upload/data-completeness').then(r => r.data),    refetchInterval: 60000   });  if (isLoading) return <div className="skeleton" style={{ height: '320px', borderRadius: '16px' }} />;  const {    totalStudents,    studentsWithData,    coveragePercent,    lastUpload  } = data || {};  return (    <div className="chart-container animate-slideUp">      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>        <div>          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>            <Database size={18} className="text-emerald" />            Data Coverage          </h3>          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Registered students with analyzed data</p>        </div>        <div style={{           background: coveragePercent > 80 ? '#10b98115' : '#f59e0b15',           color: coveragePercent > 80 ? '#10b981' : '#f59e0b',          padding: '4px 12px',          borderRadius: '20px',          fontSize: '12px',          fontWeight: '700',          border: `1px solid ${coveragePercent > 80 ? '#10b98140' : '#f59e0b40'}`        }}>          {coveragePercent}% Covered        </div>      </div>      <div style={{ marginBottom: '24px' }}>        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>          <span style={{ fontSize: '12px', color: '#64748b' }}>Coverage Progress</span>          <span style={{ fontSize: '12px', color: '#f1f5f9', fontWeight: '600' }}>{studentsWithData} / {totalStudents}</span>        </div>        <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>          <div style={{             height: '100%',             width: `${coveragePercent}%`,             background: 'linear-gradient(90deg, #10b981, #34d399)',            borderRadius: '4px',            transition: 'width 1s ease'          }} />        </div>      </div>      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px' }}>          <div style={{ background: '#10b98115', padding: '8px', borderRadius: '8px' }}>            <FileCheck size={16} className="text-emerald" />          </div>          <div>            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>LAST UPLOAD</p>            <p style={{ fontSize: '13px', fontWeight: '500', margin: 0 }}>              {lastUpload ? new Date(lastUpload.createdAt).toLocaleDateString() : 'Never'}            </p>            {lastUpload && <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>{lastUpload.originalFilename}</p>}          </div>        </div>        {coveragePercent < 100 && (          <div style={{ display: 'flex', gap: '10px', padding: '12px', background: '#f59e0b08', border: '1px solid #f59e0b20', borderRadius: '10px' }}>            <AlertCircle size={16} className="text-amber" style={{ flexShrink: 0 }} />            <p style={{ fontSize: '11px', color: '#f59e0b', margin: 0 }}>              {totalStudents - studentsWithData} registered students in your department have no data. Verify their Roll Nos in your next CSV.            </p>          </div>        )}      </div>      <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>        <Info size={14} className="text-blue" />        <p style={{ fontSize: '10px', color: '#64748b', margin: 0 }}>          Missing data affects "Risk Prediction" accuracy.        </p>      </div>    </div>  );}
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/axios';
+import { Database, AlertCircle, FileCheck, Info } from 'lucide-react';
+
+export default function DataCompletenessCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['faculty-data-completeness'],
+    queryFn: () => api.get('/upload/data-completeness').then(r => r.data),
+    refetchInterval: 60000 
+  });
+
+  if (isLoading) return <div className="skeleton" style={{ height: '320px', borderRadius: '16px' }} />;
+
+  const {
+    totalStudents,
+    studentsWithData,
+    coveragePercent,
+    lastUpload
+  } = data || {};
+
+  return (
+    <div className="chart-container animate-slideUp">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+        <div>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Database size={18} className="text-emerald" />
+            Data Coverage
+          </h3>
+          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Registered students with analyzed data</p>
+        </div>
+        <div style={{ 
+          background: coveragePercent > 80 ? '#10b98115' : '#f59e0b15', 
+          color: coveragePercent > 80 ? '#10b981' : '#f59e0b',
+          padding: '4px 12px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: '700',
+          border: `1px solid ${coveragePercent > 80 ? '#10b98140' : '#f59e0b40'}`
+        }}>
+          {coveragePercent}% Covered
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>Coverage Progress</span>
+          <span style={{ fontSize: '12px', color: '#f1f5f9', fontWeight: '600' }}>{studentsWithData} / {totalStudents}</span>
+        </div>
+        <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{ 
+            height: '100%', 
+            width: `${coveragePercent}%`, 
+            background: 'linear-gradient(90deg, #10b981, #34d399)',
+            borderRadius: '4px',
+            transition: 'width 1s ease'
+          }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px' }}>
+          <div style={{ background: '#10b98115', padding: '8px', borderRadius: '8px' }}>
+            <FileCheck size={16} className="text-emerald" />
+          </div>
+          <div>
+            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>LAST UPLOAD</p>
+            <p style={{ fontSize: '13px', fontWeight: '500', margin: 0 }}>
+              {lastUpload ? new Date(lastUpload.createdAt).toLocaleDateString() : 'Never'}
+            </p>
+            {lastUpload && <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>{lastUpload.originalFilename}</p>}
+          </div>
+        </div>
+
+        {coveragePercent < 100 && (
+          <div style={{ display: 'flex', gap: '10px', padding: '12px', background: '#f59e0b08', border: '1px solid #f59e0b20', borderRadius: '10px' }}>
+            <AlertCircle size={16} className="text-amber" style={{ flexShrink: 0 }} />
+            <p style={{ fontSize: '11px', color: '#f59e0b', margin: 0 }}>
+              {totalStudents - studentsWithData} registered students in your department have no data. Verify their Roll Nos in your next CSV.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+        <Info size={14} className="text-blue" />
+        <p style={{ fontSize: '10px', color: '#64748b', margin: 0 }}>
+          Missing data affects "Risk Prediction" accuracy.
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -1,1 +1,214 @@
-'use client';import { useState, useEffect, useMemo } from 'react';import { useQuery, useMutation } from '@tanstack/react-query';import { motion, AnimatePresence } from 'framer-motion';import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, parse, addDays, addMonths } from 'date-fns';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import { CardSkel } from '@/components/ui/Skeleton';import { Slider } from '@/components/ui/Slider';import toast from 'react-hot-toast';import { Calendar, Clock, BookOpen, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';const CalendarView = ({ plan }) => {  const [currentMonth, setCurrentMonth] = useState(new Date());  const allTasks = useMemo(() => {    if (!plan?.plan) return [];    return plan.plan.flatMap(week => {      const baseDate = parse(week.startDate + ' 2026', 'dd MMM yyyy', new Date());      return week.tasks.map(task => {        const dayMap = { 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5, 'Sun': 6 };        const taskDate = addDays(baseDate, dayMap[task.day] || 0);        return { ...task, date: taskDate };      });    });  }, [plan]);  const days = eachDayOfInterval({    start: startOfWeek(startOfMonth(currentMonth)),    end: endOfWeek(endOfMonth(currentMonth)),  });  return (    <div className="animate-fadeIn">      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{format(currentMonth, 'MMMM yyyy')}</h3>        <div style={{ display: 'flex', gap: 8 }}>          <button onClick={() => setCurrentMonth(prev => addMonths(prev, -1))} className="btn-ghost" style={{ padding: 8, minWidth: 40 }}><ChevronLeft size={18} /></button>          <button onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} className="btn-ghost" style={{ padding: 8, minWidth: 40 }}><ChevronRight size={18} /></button>        </div>      </div>      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: 'var(--border)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (          <div key={d} style={{ background: 'var(--bg-card-2)', padding: '12px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{d}</div>        ))}        {days.map(day => {          const dayTasks = allTasks.filter(t => isSameDay(t.date, day));          const isCurrentMonth = isSameMonth(day, currentMonth);          return (            <div key={day.toString()} style={{              minHeight: 110, background: isCurrentMonth ? 'var(--bg-card)' : 'rgba(0,0,0,0.2)',              padding: 10, position: 'relative', transition: 'all 0.2s',              cursor: dayTasks.length ? 'pointer' : 'default',              border: isSameDay(day, new Date()) ? '1px solid var(--indigo)' : 'none'            }}>              <span style={{ fontSize: 12, fontWeight: 600, color: isCurrentMonth ? 'var(--text-secondary)' : 'var(--text-faint)' }}>{format(day, 'd')}</span>              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>                {dayTasks.map((t, i) => (                  <div key={i} style={{                     fontSize: 10, padding: '2px 6px', borderRadius: 4,                     background: 'var(--indigo-pale)', color: 'var(--indigo-light)',                    display: 'flex', alignItems: 'center', gap: 4,                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'                  }}>                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--indigo)' }} />                    {t.subject}                  </div>                ))}              </div>            </div>          );        })}      </div>    </div>  );};export default function StudyPlanPage() {  const [step, setStep] = useState(1);   const [rows, setRows] = useState([]);  const [plan, setPlan] = useState(null);  const [view, setView] = useState('list');   const { data: marksTrend, isLoading } = useQuery({    queryKey: ['marks-trend'],    queryFn: () => api.get('/student/marks-trend').then(r => r.data),  });  useEffect(() => {    if (marksTrend?.subjects?.length && rows.length === 0) {      setRows(marksTrend.subjects.map(s => ({ subject: s, examDate: '', hoursPerDay: 4 })));    }  }, [marksTrend]);  const mutation = useMutation({    mutationFn: () => api.post('/student/study-plan', { subjects: rows }),    onSuccess: ({ data }) => { setPlan(data); setStep(2); },    onError: () => toast.error('AI couldn\'t generate plan. Try again.'),  });  if (isLoading) return <div className="dashboard-content"><CardSkel height={400} /></div>;  return (    <div className="dashboard-content">      <PageHeader title="📖 AI Study Plan" subtitle="Build a personalized study schedule tailored to your goals and exams" />      <AnimatePresence mode="wait">        {step === 1 ? (          <motion.div key="form" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}>            <div className="chart-container" style={{ maxWidth: 800, margin: '0 auto' }}>              <div className="chart-title">                <LayoutGrid size={16} /> Configure Study Parameters              </div>              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24 }}>Enter your exam dates and targets. Our AI will craft a plan starting from today.</p>              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>                {rows.map((row, i) => (                  <div key={i} className="kpi-card" style={{ padding: 20 }}>                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>                      <h4 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{row.subject}</h4>                      <span className="badge badge-primary">{row.hoursPerDay} hrs/day target</span>                    </div>                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>                      <div>                        <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>Exam Date</label>                        <input type="text" value={row.examDate}                          onChange={e => setRows(rows.map((r, idx) => idx === i ? { ...r, examDate: e.target.value } : r))}                          placeholder="e.g. 15 May" className="input-field" />                      </div>                      <div>                         <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>Intensity</label>                         <Slider value={row.hoursPerDay}                          onChange={val => setRows(rows.map((r, idx) => idx === i ? { ...r, hoursPerDay: val } : r))}                          min={1} max={12} step={1} />                      </div>                    </div>                  </div>                ))}              </div>              <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="btn-primary" style={{                marginTop: 32, width: '100%', height: 52, fontSize: 15,              }}>                {mutation.isPending ? (                  <><span className="spinner" /> Generating Strategy...</>                ) : 'Craft AI Study Plan'}              </button>            </div>          </motion.div>        ) : (          <motion.div key="plan" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>              <div className="tab-container" style={{ width: 'fit-content' }}>                <button onClick={() => setView('list')} className={`tab-btn ${view === 'list' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>                  <List size={14} /> List View                </button>                <button onClick={() => setView('calendar')} className={`tab-btn ${view === 'calendar' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>                  <Calendar size={14} /> Calendar View                </button>              </div>              <div style={{ display: 'flex', gap: 10 }}>                <button onClick={() => setStep(1)} className="btn-ghost" style={{ gap: 6 }}><ChevronLeft size={14} /> Adjust</button>                <button onClick={() => window.print()} className="btn-ghost" style={{ gap: 6 }}>🖨️ Print</button>              </div>            </div>            <AnimatePresence mode="wait">              {view === 'list' ? (                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>                  {plan?.plan?.map((week, wi) => (                    <div key={wi} className="chart-container" style={{ marginBottom: 24, borderLeft: `4px solid var(--indigo)` }}>                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>                        <div className="chart-title" style={{ margin: 0 }}>Week {week.week} · <span style={{ color: 'var(--text-muted)' }}>{week.startDate} – {week.endDate}</span></div>                        <span className="badge badge-info">{week.tasks.length} Sessions</span>                      </div>                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>                        {week.tasks?.map((task, ti) => (                          <div key={ti} className="kpi-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>                            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--indigo-pale)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--indigo-light)', fontSize: 11, fontWeight: 800 }}>                              {task.day}                            </div>                            <div style={{ flex: 1 }}>                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>                                 <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{task.subject}</span>                                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>• {task.topic}</span>                               </div>                            </div>                            <div style={{ textAlign: 'right' }}>                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--indigo-light)', fontSize: 12, fontWeight: 600 }}>                                 <Clock size={12} /> {task.duration}h                               </div>                            </div>                          </div>                        ))}                      </div>                    </div>                  ))}                </motion.div>              ) : (                <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>                  <div className="chart-container">                    <CalendarView plan={plan} />                  </div>                </motion.div>              )}            </AnimatePresence>          </motion.div>        )}      </AnimatePresence>    </div>  );}
+'use client';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, parse, addDays, addMonths } from 'date-fns';
+import api from '@/lib/axios';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { CardSkel } from '@/components/ui/Skeleton';
+import { Slider } from '@/components/ui/Slider';
+import toast from 'react-hot-toast';
+import { Calendar, Clock, BookOpen, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
+
+const CalendarView = ({ plan }) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const allTasks = useMemo(() => {
+    if (!plan?.plan) return [];
+    return plan.plan.flatMap(week => {
+      const baseDate = parse(week.startDate + ' 2026', 'dd MMM yyyy', new Date());
+      return week.tasks.map(task => {
+        const dayMap = { 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5, 'Sun': 6 };
+        const taskDate = addDays(baseDate, dayMap[task.day] || 0);
+        return { ...task, date: taskDate };
+      });
+    });
+  }, [plan]);
+
+  const days = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(currentMonth)),
+    end: endOfWeek(endOfMonth(currentMonth)),
+  });
+
+  return (
+    <div className="animate-fadeIn">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{format(currentMonth, 'MMMM yyyy')}</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setCurrentMonth(prev => addMonths(prev, -1))} className="btn-ghost" style={{ padding: 8, minWidth: 40 }}><ChevronLeft size={18} /></button>
+          <button onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} className="btn-ghost" style={{ padding: 8, minWidth: 40 }}><ChevronRight size={18} /></button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: 'var(--border)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+          <div key={d} style={{ background: 'var(--bg-card-2)', padding: '12px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{d}</div>
+        ))}
+        {days.map(day => {
+          const dayTasks = allTasks.filter(t => isSameDay(t.date, day));
+          const isCurrentMonth = isSameMonth(day, currentMonth);
+          return (
+            <div key={day.toString()} style={{
+              minHeight: 110, background: isCurrentMonth ? 'var(--bg-card)' : 'rgba(0,0,0,0.2)',
+              padding: 10, position: 'relative', transition: 'all 0.2s',
+              cursor: dayTasks.length ? 'pointer' : 'default',
+              border: isSameDay(day, new Date()) ? '1px solid var(--indigo)' : 'none'
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: isCurrentMonth ? 'var(--text-secondary)' : 'var(--text-faint)' }}>{format(day, 'd')}</span>
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {dayTasks.map((t, i) => (
+                  <div key={i} style={{ 
+                    fontSize: 10, padding: '2px 6px', borderRadius: 4, 
+                    background: 'var(--indigo-pale)', color: 'var(--indigo-light)',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>
+                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--indigo)' }} />
+                    {t.subject}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default function StudyPlanPage() {
+  const [step, setStep] = useState(1); // 1=form, 2=plan
+  const [rows, setRows] = useState([]);
+  const [plan, setPlan] = useState(null);
+  const [view, setView] = useState('list'); // 'list' | 'calendar'
+
+  const { data: marksTrend, isLoading } = useQuery({
+    queryKey: ['marks-trend'],
+    queryFn: () => api.get('/student/marks-trend').then(r => r.data),
+  });
+
+  useEffect(() => {
+    if (marksTrend?.subjects?.length && rows.length === 0) {
+      setRows(marksTrend.subjects.map(s => ({ subject: s, examDate: '', hoursPerDay: 4 })));
+    }
+  }, [marksTrend]);
+
+  const mutation = useMutation({
+    mutationFn: () => api.post('/student/study-plan', { subjects: rows }),
+    onSuccess: ({ data }) => { setPlan(data); setStep(2); },
+    onError: () => toast.error('AI couldn\'t generate plan. Try again.'),
+  });
+
+  if (isLoading) return <div className="dashboard-content"><CardSkel height={400} /></div>;
+
+  return (
+    <div className="dashboard-content">
+      <PageHeader title="📖 AI Study Plan" subtitle="Build a personalized study schedule tailored to your goals and exams" />
+
+      <AnimatePresence mode="wait">
+        {step === 1 ? (
+          <motion.div key="form" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}>
+            <div className="chart-container" style={{ maxWidth: 800, margin: '0 auto' }}>
+              <div className="chart-title">
+                <LayoutGrid size={16} /> Configure Study Parameters
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24 }}>Enter your exam dates and targets. Our AI will craft a plan starting from today.</p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {rows.map((row, i) => (
+                  <div key={i} className="kpi-card" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h4 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{row.subject}</h4>
+                      <span className="badge badge-primary">{row.hoursPerDay} hrs/day target</span>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>Exam Date</label>
+                        <input type="text" value={row.examDate}
+                          onChange={e => setRows(rows.map((r, idx) => idx === i ? { ...r, examDate: e.target.value } : r))}
+                          placeholder="e.g. 15 May" className="input-field" />
+                      </div>
+                      <div>
+                         <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>Intensity</label>
+                         <Slider value={row.hoursPerDay}
+                          onChange={val => setRows(rows.map((r, idx) => idx === i ? { ...r, hoursPerDay: val } : r))}
+                          min={1} max={12} step={1} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="btn-primary" style={{
+                marginTop: 32, width: '100%', height: 52, fontSize: 15,
+              }}>
+                {mutation.isPending ? (
+                  <><span className="spinner" /> Generating Strategy...</>
+                ) : 'Craft AI Study Plan'}
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="plan" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div className="tab-container" style={{ width: 'fit-content' }}>
+                <button onClick={() => setView('list')} className={`tab-btn ${view === 'list' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <List size={14} /> List View
+                </button>
+                <button onClick={() => setView('calendar')} className={`tab-btn ${view === 'calendar' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Calendar size={14} /> Calendar View
+                </button>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setStep(1)} className="btn-ghost" style={{ gap: 6 }}><ChevronLeft size={14} /> Adjust</button>
+                <button onClick={() => window.print()} className="btn-ghost" style={{ gap: 6 }}>🖨️ Print</button>
+              </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {view === 'list' ? (
+                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {plan?.plan?.map((week, wi) => (
+                    <div key={wi} className="chart-container" style={{ marginBottom: 24, borderLeft: `4px solid var(--indigo)` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <div className="chart-title" style={{ margin: 0 }}>Week {week.week} · <span style={{ color: 'var(--text-muted)' }}>{week.startDate} – {week.endDate}</span></div>
+                        <span className="badge badge-info">{week.tasks.length} Sessions</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {week.tasks?.map((task, ti) => (
+                          <div key={ti} className="kpi-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--indigo-pale)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--indigo-light)', fontSize: 11, fontWeight: 800 }}>
+                              {task.day}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                 <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{task.subject}</span>
+                                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>• {task.topic}</span>
+                               </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--indigo-light)', fontSize: 12, fontWeight: 600 }}>
+                                 <Clock size={12} /> {task.duration}h
+                               </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div className="chart-container">
+                    <CalendarView plan={plan} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

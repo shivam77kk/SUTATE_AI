@@ -1,1 +1,63 @@
-'use client';import { Keyboard, Mic } from 'lucide-react';export default function ChatModeToggle({ mode, onChange }) {  return (    <div style={{      display: 'flex',      alignItems: 'center',      background: 'rgba(255,255,255,0.05)',      borderRadius: '999px',      padding: '4px',      gap: '2px',      border: '1px solid rgba(124,58,237,0.2)',    }}>      <button        onClick={() => onChange('text')}        style={{          padding: '6px 18px',          borderRadius: '999px',          fontSize: '13px',          fontWeight: 500,          border: 'none',          cursor: 'pointer',          transition: 'all 0.2s',          background: mode === 'text' ? '#7C3AED' : 'transparent',          color:      mode === 'text' ? '#ffffff' : 'rgba(255,255,255,0.5)',          display: 'flex',          alignItems: 'center',          gap: '6px',        }}        type="button"      >        <Keyboard size={16} />        Text      </button>      <button        onClick={() => onChange('voice')}        style={{          padding: '6px 18px',          borderRadius: '999px',          fontSize: '13px',          fontWeight: 500,          border: 'none',          cursor: 'pointer',          transition: 'all 0.2s',          background: mode === 'voice' ? '#7C3AED' : 'transparent',          color:      mode === 'voice' ? '#ffffff' : 'rgba(255,255,255,0.5)',          display: 'flex',          alignItems: 'center',          gap: '6px',        }}        type="button"      >        <Mic size={16} />        Voice      </button>    </div>  );}
+'use client';
+import { Keyboard, Mic } from 'lucide-react';
+
+/**
+ * Toggle component to switch between Text and Voice chat modes.
+ */
+export default function ChatModeToggle({ mode, onChange }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      background: 'rgba(255,255,255,0.05)',
+      borderRadius: '999px',
+      padding: '4px',
+      gap: '2px',
+      border: '1px solid rgba(124,58,237,0.2)',
+    }}>
+      <button
+        onClick={() => onChange('text')}
+        style={{
+          padding: '6px 18px',
+          borderRadius: '999px',
+          fontSize: '13px',
+          fontWeight: 500,
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          background: mode === 'text' ? '#7C3AED' : 'transparent',
+          color:      mode === 'text' ? '#ffffff' : 'rgba(255,255,255,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+        type="button"
+      >
+        <Keyboard size={16} />
+        Text
+      </button>
+
+      <button
+        onClick={() => onChange('voice')}
+        style={{
+          padding: '6px 18px',
+          borderRadius: '999px',
+          fontSize: '13px',
+          fontWeight: 500,
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          background: mode === 'voice' ? '#7C3AED' : 'transparent',
+          color:      mode === 'voice' ? '#ffffff' : 'rgba(255,255,255,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+        type="button"
+      >
+        <Mic size={16} />
+        Voice
+      </button>
+    </div>
+  );
+}

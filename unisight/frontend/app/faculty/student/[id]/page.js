@@ -1,1 +1,147 @@
-'use client';import { useParams } from 'next/navigation';import { useState } from 'react';import { useQuery } from '@tanstack/react-query';import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import { KPICard } from '@/components/shared/KPICard';import { CardSkel } from '@/components/ui/Skeleton';import { Tabs } from '@/components/ui/Tabs';import { SafeTip, CW } from '@/lib/chart';import Link from 'next/link';const TIER_COLORS = { LOW: '#10b981', MEDIUM: '#f59e0b', HIGH: '#f43f5e', CRITICAL: '#dc2626' };export default function StudentProfilePage() {  const { id } = useParams();  const [tab, setTab] = useState('overview');  const { data: profile, isLoading } = useQuery({    queryKey: ['faculty-student', id],    queryFn: () => api.get(`/faculty/student/${id}/full-profile`).then(r => r.data),  });  const { data: longitudinal } = useQuery({    queryKey: ['faculty-student-longitudinal', id],    queryFn: () => api.get(`/faculty/student/${id}/longitudinal`).then(r => r.data).catch(() => null),  });  if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;  const s = profile?.student || {};  const insight = profile?.insight || {};  const tierColor = TIER_COLORS[insight.dropoutTier || insight.riskLevel] || '#64748b';  return (    <div className="dashboard-content">      <PageHeader        breadcrumb={['Faculty', 'Students', s.name || id]}        title={s.name || 'Student Profile'}        subtitle={`${s.studentId || ''} · ${s.department || ''} · Sem ${s.semester || ''}`}      />      {}      <div className="grid-4" style={{ marginBottom: 24 }}>        <KPICard label="CGPA" value={insight.cgpa?.toFixed(2) ?? '--'} unit="/ 10" color="indigo" />        <KPICard label="RISK LEVEL" value={insight.riskLevel ?? '--'} color={insight.riskLevel === 'LOW' ? 'emerald' : 'rose'}          badge={<span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: `${tierColor}18`, color: tierColor }}>{insight.dropoutTier || insight.riskLevel}</span>} />        <KPICard label="CLASS RANK" value={insight.classRank ? `#${insight.classRank}` : '--'} color="amber" />        <KPICard label="DROPOUT SCORE" value={insight.dropoutProbabilityScore ?? '--'} unit="/ 100" color={insight.dropoutTier === 'LOW' ? 'emerald' : 'rose'} />      </div>      {}      {insight.riskReason && (        <div style={{ background: `${tierColor}08`, border: `1px solid ${tierColor}25`, borderRadius: 12, padding: '12px 18px', marginBottom: 20 }}>          <p style={{ fontSize: 13, color: '#f1f5f9' }}>⚠ {insight.riskReason}</p>        </div>      )}      <Tabs tabs={['overview', 'timeline', 'activity']} active={tab} onChange={setTab} variant="line" />      <div style={{ marginTop: 24 }}>        {tab === 'overview' && (          <div>            <div className="grid-2">              <div className="chart-container">                <div className="chart-title">Subject Performance</div>                {(profile?.marks || []).map((subj, i) => (                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>                    <span style={{ color: '#94a3b8' }}>{subj.subject}</span>                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#94a3b8' }}>                      UT1:{subj.scores?.ut1 || 0} Mid:{subj.scores?.midSem || 0} UT2:{subj.scores?.ut2 || 0} End:{subj.scores?.endSem || 0}                    </span>                  </div>                ))}              </div>              <div className="chart-container">                <div className="chart-title">Attendance by Subject</div>                {(profile?.attendance || []).map((att, i) => (                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>                      <span style={{ color: '#94a3b8' }}>{att.subject}</span>                      <span style={{ color: att.percentage >= 75 ? '#10b981' : '#f43f5e', fontFamily: 'monospace', fontWeight: 600 }}>{att.percentage}%</span>                    </div>                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 999, height: 4 }}>                      <div style={{ height: '100%', width: `${att.percentage}%`, background: att.percentage >= 75 ? '#10b981' : '#f43f5e', borderRadius: 999 }} />                    </div>                  </div>                ))}              </div>            </div>            {longitudinal?.semesters?.length > 1 && (              <CW title="📈 Longitudinal CGPA" height={220} style={{ marginTop: 20 }}>                <ResponsiveContainer>                  <LineChart data={longitudinal.semesters}>                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />                    <XAxis dataKey="semester" tick={{ fill: '#64748b', fontSize: 11 }} />                    <YAxis domain={[0, 10]} tick={{ fill: '#64748b', fontSize: 11 }} />                    <Tooltip content={<SafeTip />} />                    <Line type="monotone" dataKey="cgpa" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} />                  </LineChart>                </ResponsiveContainer>              </CW>            )}          </div>        )}        {tab === 'timeline' && (          <div className="chart-container">            <div className="chart-title">⏳ Academic Events</div>            {(profile?.timeline?.events || []).length === 0 ? (              <div className="empty-state"><span style={{ fontSize: 28 }}>✅</span><p>No risk events recorded</p></div>            ) : (              (profile?.timeline?.events || []).map((ev, i) => (                <div key={i} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>                  <div style={{ fontSize: 18, flexShrink: 0 }}>{ev.type === 'risk_change' ? '📉' : ev.type === 'improvement' ? '✅' : 'ℹ️'}</div>                  <div>                    <p style={{ fontWeight: 500, fontSize: 14, color: '#f1f5f9', marginBottom: 3 }}>{ev.title || ev.event}</p>                    <p style={{ fontSize: 12, color: '#94a3b8' }}>{ev.description || ev.event}</p>                    <p style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontFamily: 'monospace' }}>{ev.date}</p>                  </div>                </div>              ))            )}          </div>        )}        {tab === 'activity' && (          <div className="chart-container">            <div className="chart-title">⚡ Activity & Feedback</div>            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>              {[                { label: 'Risk Level', value: insight.riskLevel ?? '--' },                { label: 'CGPA', value: insight.cgpa?.toFixed(2) ?? '--' },                { label: 'Class Rank', value: insight.classRank ? `#${insight.classRank}` : '--' },              ].map((item, i) => (                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>                  <span style={{ color: '#94a3b8' }}>{item.label}</span>                  <span style={{ color: '#f1f5f9', fontFamily: 'monospace', fontWeight: 600 }}>{item.value}</span>                </div>              ))}            </div>          </div>        )}      </div>    </div>  );}
+'use client';
+import { useParams } from 'next/navigation';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import api from '@/lib/axios';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { KPICard } from '@/components/shared/KPICard';
+import { CardSkel } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
+import { SafeTip, CW } from '@/lib/chart';
+import Link from 'next/link';
+
+const TIER_COLORS = { LOW: '#10b981', MEDIUM: '#f59e0b', HIGH: '#f43f5e', CRITICAL: '#dc2626' };
+
+export default function StudentProfilePage() {
+  const { id } = useParams();
+  const [tab, setTab] = useState('overview');
+
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ['faculty-student', id],
+    queryFn: () => api.get(`/faculty/student/${id}/full-profile`).then(r => r.data),
+  });
+
+  const { data: longitudinal } = useQuery({
+    queryKey: ['faculty-student-longitudinal', id],
+    queryFn: () => api.get(`/faculty/student/${id}/longitudinal`).then(r => r.data).catch(() => null),
+  });
+
+  if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;
+
+  const s = profile?.student || {};
+  const insight = profile?.insight || {};
+  const tierColor = TIER_COLORS[insight.dropoutTier || insight.riskLevel] || '#64748b';
+
+  return (
+    <div className="dashboard-content">
+      <PageHeader
+        breadcrumb={['Faculty', 'Students', s.name || id]}
+        title={s.name || 'Student Profile'}
+        subtitle={`${s.studentId || ''} · ${s.department || ''} · Sem ${s.semester || ''}`}
+      />
+
+      {/* Quick stats row */}
+      <div className="grid-4" style={{ marginBottom: 24 }}>
+        <KPICard label="CGPA" value={insight.cgpa?.toFixed(2) ?? '--'} unit="/ 10" color="indigo" />
+        <KPICard label="RISK LEVEL" value={insight.riskLevel ?? '--'} color={insight.riskLevel === 'LOW' ? 'emerald' : 'rose'}
+          badge={<span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: `${tierColor}18`, color: tierColor }}>{insight.dropoutTier || insight.riskLevel}</span>} />
+        <KPICard label="CLASS RANK" value={insight.classRank ? `#${insight.classRank}` : '--'} color="amber" />
+        <KPICard label="DROPOUT SCORE" value={insight.dropoutProbabilityScore ?? '--'} unit="/ 100" color={insight.dropoutTier === 'LOW' ? 'emerald' : 'rose'} />
+      </div>
+
+      {/* Risk reason */}
+      {insight.riskReason && (
+        <div style={{ background: `${tierColor}08`, border: `1px solid ${tierColor}25`, borderRadius: 12, padding: '12px 18px', marginBottom: 20 }}>
+          <p style={{ fontSize: 13, color: '#f1f5f9' }}>⚠ {insight.riskReason}</p>
+        </div>
+      )}
+
+      <Tabs tabs={['overview', 'timeline', 'activity']} active={tab} onChange={setTab} variant="line" />
+      <div style={{ marginTop: 24 }}>
+        {tab === 'overview' && (
+          <div>
+            <div className="grid-2">
+              <div className="chart-container">
+                <div className="chart-title">Subject Performance</div>
+                {(profile?.marks || []).map((subj, i) => (
+                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: '#94a3b8' }}>{subj.subject}</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#94a3b8' }}>
+                      UT1:{subj.scores?.ut1 || 0} Mid:{subj.scores?.midSem || 0} UT2:{subj.scores?.ut2 || 0} End:{subj.scores?.endSem || 0}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="chart-container">
+                <div className="chart-title">Attendance by Subject</div>
+                {(profile?.attendance || []).map((att, i) => (
+                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                      <span style={{ color: '#94a3b8' }}>{att.subject}</span>
+                      <span style={{ color: att.percentage >= 75 ? '#10b981' : '#f43f5e', fontFamily: 'monospace', fontWeight: 600 }}>{att.percentage}%</span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 999, height: 4 }}>
+                      <div style={{ height: '100%', width: `${att.percentage}%`, background: att.percentage >= 75 ? '#10b981' : '#f43f5e', borderRadius: 999 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {longitudinal?.semesters?.length > 1 && (
+              <CW title="📈 Longitudinal CGPA" height={220} style={{ marginTop: 20 }}>
+                <ResponsiveContainer>
+                  <LineChart data={longitudinal.semesters}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
+                    <XAxis dataKey="semester" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis domain={[0, 10]} tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <Tooltip content={<SafeTip />} />
+                    <Line type="monotone" dataKey="cgpa" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CW>
+            )}
+          </div>
+        )}
+
+        {tab === 'timeline' && (
+          <div className="chart-container">
+            <div className="chart-title">⏳ Academic Events</div>
+            {(profile?.timeline?.events || []).length === 0 ? (
+              <div className="empty-state"><span style={{ fontSize: 28 }}>✅</span><p>No risk events recorded</p></div>
+            ) : (
+              (profile?.timeline?.events || []).map((ev, i) => (
+                <div key={i} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <div style={{ fontSize: 18, flexShrink: 0 }}>{ev.type === 'risk_change' ? '📉' : ev.type === 'improvement' ? '✅' : 'ℹ️'}</div>
+                  <div>
+                    <p style={{ fontWeight: 500, fontSize: 14, color: '#f1f5f9', marginBottom: 3 }}>{ev.title || ev.event}</p>
+                    <p style={{ fontSize: 12, color: '#94a3b8' }}>{ev.description || ev.event}</p>
+                    <p style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontFamily: 'monospace' }}>{ev.date}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === 'activity' && (
+          <div className="chart-container">
+            <div className="chart-title">⚡ Activity & Feedback</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { label: 'Risk Level', value: insight.riskLevel ?? '--' },
+                { label: 'CGPA', value: insight.cgpa?.toFixed(2) ?? '--' },
+                { label: 'Class Rank', value: insight.classRank ? `#${insight.classRank}` : '--' },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+                  <span style={{ color: '#94a3b8' }}>{item.label}</span>
+                  <span style={{ color: '#f1f5f9', fontFamily: 'monospace', fontWeight: 600 }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

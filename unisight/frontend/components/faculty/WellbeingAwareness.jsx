@@ -1,1 +1,39 @@
-'use client';import { useQuery } from '@tanstack/react-query';import api from '@/lib/axios';export default function WellbeingAwareness({ classId }) {  const { data: moodData } = useQuery({    queryKey: ['faculty-mood-flagged', classId],    queryFn: () => api.get(`/api/mood/flagged-students?classId=${classId}`).then(r => r.data),    enabled: !!classId,  });  if (!moodData) return null;  return (    <div className="chart-container animate-slideUp" style={{ animationDelay: '0.12s' }}>      <div className="chart-title">🧠 Student Wellbeing</div>      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>        {moodData.totalCheckins} of {moodData.totalStudents} students checked in this week.      </div>      {moodData.flaggedCount > 0 ? (        <div style={{ padding: '12px', borderRadius: 'var(--r-sm)', background: 'var(--amber-pale)', border: '1px solid var(--amber-glow)' }}>          <div style={{ color: 'var(--amber-light)', fontWeight: '700', fontSize: '13px', marginBottom: '4px' }}>            ⚠️ {moodData.flaggedCount} Personal Support Flag(s)          </div>          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>            Flagged students expressed low mood or low confidence. Please check in privately with students who seem withdrawn. Identities are protected.          </p>        </div>      ) : (        <div style={{ padding: '12px', borderRadius: 'var(--r-sm)', background: 'var(--emerald-pale)', border: '1px solid var(--emerald-glow)' }}>          <div style={{ color: 'var(--emerald-light)', fontWeight: '700', fontSize: '13px' }}>            ✅ No wellbeing flags this week          </div>        </div>      )}    </div>  );}
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/axios';
+
+export default function WellbeingAwareness({ classId }) {
+  const { data: moodData } = useQuery({
+    queryKey: ['faculty-mood-flagged', classId],
+    queryFn: () => api.get(`/api/mood/flagged-students?classId=${classId}`).then(r => r.data),
+    enabled: !!classId,
+  });
+
+  if (!moodData) return null;
+
+  return (
+    <div className="chart-container animate-slideUp" style={{ animationDelay: '0.12s' }}>
+      <div className="chart-title">🧠 Student Wellbeing</div>
+      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+        {moodData.totalCheckins} of {moodData.totalStudents} students checked in this week.
+      </div>
+      
+      {moodData.flaggedCount > 0 ? (
+        <div style={{ padding: '12px', borderRadius: 'var(--r-sm)', background: 'var(--amber-pale)', border: '1px solid var(--amber-glow)' }}>
+          <div style={{ color: 'var(--amber-light)', fontWeight: '700', fontSize: '13px', marginBottom: '4px' }}>
+            ⚠️ {moodData.flaggedCount} Personal Support Flag(s)
+          </div>
+          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            Flagged students expressed low mood or low confidence. Please check in privately with students who seem withdrawn. Identities are protected.
+          </p>
+        </div>
+      ) : (
+        <div style={{ padding: '12px', borderRadius: 'var(--r-sm)', background: 'var(--emerald-pale)', border: '1px solid var(--emerald-glow)' }}>
+          <div style={{ color: 'var(--emerald-light)', fontWeight: '700', fontSize: '13px' }}>
+            ✅ No wellbeing flags this week
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

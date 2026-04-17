@@ -1,1 +1,58 @@
-'use client';import { useState } from 'react';import api from '@/lib/axios';import { Download, ShieldCheck, FileText } from 'lucide-react';import toast from 'react-hot-toast';export default function NaacExportCard() {  const [loading, setLoading] = useState(false);  const handleExport = async () => {    setLoading(true);    try {      const resp = await api.get('/admin/naac-export', { responseType: 'blob' });      const url = window.URL.createObjectURL(new Blob([resp.data]));      const a = document.createElement('a');      a.href = url;      a.download = `NAAC-2024-AQAR-${new Date().getFullYear()}.pdf`;      document.body.appendChild(a);      a.click();      a.remove();      toast.success('NAAC Export Successful!');    } catch (err) {      toast.error('Failed to generate NAAC report');    } finally {      setLoading(false);    }  };  return (    <div className="chart-container animate-slideUp" style={{ background: 'linear-gradient(135deg, #064e3b, #022c22)', border: '1px solid #10b98150' }}>      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>        <div style={{ background: 'rgba(16,185,129,0.2)', padding: '10px', borderRadius: '12px' }}>          <ShieldCheck size={24} color="#10b981" />        </div>        <div style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>NAAC 2024 Compliance</div>      </div>      <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#f1f5f9', marginBottom: '8px' }}>Annual Quality Assurance Report</h3>      <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', marginBottom: '20px' }}>        Generate a criterion-ready PDF export for Criterion 2 (Teaching-Learning). Includes pass rates, department benchmarking, and AI-tracked teacher effectiveness.      </p>      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>        <button           onClick={handleExport}          disabled={loading}          className="btn-primary"           style={{ flex: 1, background: '#10b981', color: '#022c22', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}        >          {loading ? 'Generating...' : <><Download size={18} /> Download NAAC Export</>}        </button>        <button className="btn-ghost" style={{ padding: '10px', color: '#34d399', opacity: 0.6 }}>          <FileText size={18} />        </button>      </div>    </div>  );}
+'use client';
+import { useState } from 'react';
+import api from '@/lib/axios';
+import { Download, ShieldCheck, FileText } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+export default function NaacExportCard() {
+  const [loading, setLoading] = useState(false);
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const resp = await api.get('/admin/naac-export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([resp.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `NAAC-2024-AQAR-${new Date().getFullYear()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success('NAAC Export Successful!');
+    } catch (err) {
+      toast.error('Failed to generate NAAC report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chart-container animate-slideUp" style={{ background: 'linear-gradient(135deg, #064e3b, #022c22)', border: '1px solid #10b98150' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+        <div style={{ background: 'rgba(16,185,129,0.2)', padding: '10px', borderRadius: '12px' }}>
+          <ShieldCheck size={24} color="#10b981" />
+        </div>
+        <div style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>NAAC 2024 Compliance</div>
+      </div>
+      
+      <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#f1f5f9', marginBottom: '8px' }}>Annual Quality Assurance Report</h3>
+      <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', marginBottom: '20px' }}>
+        Generate a criterion-ready PDF export for Criterion 2 (Teaching-Learning). Includes pass rates, department benchmarking, and AI-tracked teacher effectiveness.
+      </p>
+
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <button 
+          onClick={handleExport}
+          disabled={loading}
+          className="btn-primary" 
+          style={{ flex: 1, background: '#10b981', color: '#022c22', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          {loading ? 'Generating...' : <><Download size={18} /> Download NAAC Export</>}
+        </button>
+        <button className="btn-ghost" style={{ padding: '10px', color: '#34d399', opacity: 0.6 }}>
+          <FileText size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}

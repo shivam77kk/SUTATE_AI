@@ -1,1 +1,76 @@
-'use client';import { useState, useEffect } from 'react';import { Bell } from 'lucide-react';import { useRouter } from 'next/navigation';import { motion, AnimatePresence } from 'framer-motion';import { io } from 'socket.io-client';import api from '@/lib/axios';export default function NotificationBell({ userId }) {  const [unread, setUnread] = useState(0);  const router = useRouter();  useEffect(() => {    if (!userId) return;    api.get('/notifications?limit=1')      .then(res => setUnread(res.data.unreadCount))      .catch(console.error);    const socketURL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';    const socket = io(socketURL, { withCredentials: true });    socket.emit('join-user', userId);    socket.on('new_notification', () => setUnread(prev => prev + 1));    return () => socket.disconnect();  }, [userId]);  return (    <motion.button       onClick={() => router.push('/notifications')}      whileHover={{ scale: 1.1 }}      whileTap={{ scale: 0.95 }}      style={{        position: 'relative',        background: 'rgba(255,255,255,0.04)',        border: '1px solid rgba(255,255,255,0.08)',        borderRadius: 10,        color: '#64748b',        cursor: 'pointer',        padding: 8,        width: 36, height: 36,        display: 'flex', alignItems: 'center', justifyContent: 'center',        transition: 'all 0.2s',        backdropFilter: 'blur(8px)',      }}    >      <Bell size={16} />      <AnimatePresence>        {unread > 0 && (          <motion.span            initial={{ scale: 0 }}            animate={{ scale: 1 }}            exit={{ scale: 0 }}            style={{              position: 'absolute',              top: -4, right: -4,              background: 'linear-gradient(135deg, #f43f5e, #e11d48)',              color: '#fff',              fontSize: 9,              fontWeight: 800,              minWidth: 18, height: 18,              borderRadius: 9,              display: 'flex', alignItems: 'center', justifyContent: 'center',              padding: '0 4px',              boxShadow: '0 0 8px rgba(244,63,94,0.5), 0 0 0 2px rgba(10,10,26,0.9)',              border: '1px solid rgba(255,255,255,0.15)',            }}          >            {unread > 99 ? '99+' : unread}          </motion.span>        )}      </AnimatePresence>    </motion.button>  );}
+'use client';
+import { useState, useEffect } from 'react';
+import { Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { io } from 'socket.io-client';
+import api from '@/lib/axios';
+
+export default function NotificationBell({ userId }) {
+  const [unread, setUnread] = useState(0);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!userId) return;
+    
+    api.get('/notifications?limit=1')
+      .then(res => setUnread(res.data.unreadCount))
+      .catch(console.error);
+
+    const socketURL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+    const socket = io(socketURL, { withCredentials: true });
+
+    socket.emit('join-user', userId);
+    socket.on('new_notification', () => setUnread(prev => prev + 1));
+
+    return () => socket.disconnect();
+  }, [userId]);
+
+  return (
+    <motion.button 
+      onClick={() => router.push('/notifications')}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.95 }}
+      style={{
+        position: 'relative',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 10,
+        color: '#64748b',
+        cursor: 'pointer',
+        padding: 8,
+        width: 36, height: 36,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.2s',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <Bell size={16} />
+      <AnimatePresence>
+        {unread > 0 && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            style={{
+              position: 'absolute',
+              top: -4, right: -4,
+              background: 'linear-gradient(135deg, #f43f5e, #e11d48)',
+              color: '#fff',
+              fontSize: 9,
+              fontWeight: 800,
+              minWidth: 18, height: 18,
+              borderRadius: 9,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 4px',
+              boxShadow: '0 0 8px rgba(244,63,94,0.5), 0 0 0 2px rgba(10,10,26,0.9)',
+              border: '1px solid rgba(255,255,255,0.15)',
+            }}
+          >
+            {unread > 99 ? '99+' : unread}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}

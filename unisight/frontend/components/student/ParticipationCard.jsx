@@ -1,1 +1,37 @@
-import React from 'react';import { Activity } from 'lucide-react';export default function ParticipationCard({ participationScore }) {  const score = participationScore || 0;  let label = 'Needs Improvement';  let barColor = 'bg-red-500 text-red-600';  if (score >= 75) { label = 'Excellent'; barColor = 'bg-emerald-500 text-emerald-600'; }  else if (score >= 50) { label = 'Average'; barColor = 'bg-yellow-500 text-yellow-600'; }  return (    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full justify-between">      <div>        <div className="flex items-center justify-between mb-2">          <h3 className="text-gray-500 text-sm font-medium tracking-wide string">Participation Metric</h3>          <div className={`p-2 rounded-lg bg-opacity-10 ${barColor.split(' ')[0].replace('bg-', 'bg-')}`}><Activity size={18} className={barColor.split(' ')[1]}/></div>        </div>        <div className="flex items-end gap-2">          <span className="text-3xl font-bold text-gray-900">{score}</span>          <span className="text-gray-500 font-medium mb-1">/ 100</span>        </div>        <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-semibold">Automated engagement score</p>      </div>      <div className="mt-5">        <div className="flex justify-between text-xs font-bold text-gray-700 mb-2">          <span>{label}</span>          <span>{score}%</span>        </div>        <div className="w-full bg-gray-100 rounded-full h-2">          <div className={`h-2 rounded-full ${barColor.split(' ')[0]}`} style={{ width: `${score}%` }}></div>        </div>      </div>    </div>  );}
+import React from 'react';
+import { Activity } from 'lucide-react';
+
+export default function ParticipationCard({ participationScore }) {
+  const score = participationScore || 0;
+  let label = 'Needs Improvement';
+  let barColor = 'bg-red-500 text-red-600';
+  
+  if (score >= 75) { label = 'Excellent'; barColor = 'bg-emerald-500 text-emerald-600'; }
+  else if (score >= 50) { label = 'Average'; barColor = 'bg-yellow-500 text-yellow-600'; }
+
+  return (
+    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full justify-between">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-gray-500 text-sm font-medium tracking-wide string">Participation Metric</h3>
+          <div className={`p-2 rounded-lg bg-opacity-10 ${barColor.split(' ')[0].replace('bg-', 'bg-')}`}><Activity size={18} className={barColor.split(' ')[1]}/></div>
+        </div>
+        <div className="flex items-end gap-2">
+          <span className="text-3xl font-bold text-gray-900">{score}</span>
+          <span className="text-gray-500 font-medium mb-1">/ 100</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-semibold">Automated engagement score</p>
+      </div>
+      
+      <div className="mt-5">
+        <div className="flex justify-between text-xs font-bold text-gray-700 mb-2">
+          <span>{label}</span>
+          <span>{score}%</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-2">
+          <div className={`h-2 rounded-full ${barColor.split(' ')[0]}`} style={{ width: `${score}%` }}></div>
+        </div>
+      </div>
+    </div>
+  );
+}

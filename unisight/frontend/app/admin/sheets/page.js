@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { CardSkel } from '@/components/ui/Skeleton';
 import { FileSpreadsheet, RefreshCw, Link as LinkIcon, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
+
 export default function AdminSheetsPage() {
   const [showSetup, setShowSetup] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
@@ -14,11 +15,14 @@ export default function AdminSheetsPage() {
   const [department, setDepartment] = useState('');
   const [semester, setSemester] = useState('');
   const qc = useQueryClient();
+
   const { data: configData, isLoading: configLoading } = useQuery({
     queryKey: ['sheets-config'],
     queryFn: () => api.get('/sheets').then(r => r.data),
   });
+
   const config = configData?.config;
+
   const setupMutation = useMutation({
     mutationFn: (data) => api.post('/sheets', data),
     onSuccess: (res) => {
@@ -32,6 +36,7 @@ export default function AdminSheetsPage() {
     },
     onError: (err) => toast.error(err.response?.data?.error || 'Setup failed'),
   });
+
   const syncMutation = useMutation({
     mutationFn: () => api.post('/sheets/sync-now'),
     onSuccess: (res) => {
@@ -40,6 +45,7 @@ export default function AdminSheetsPage() {
     },
     onError: (err) => toast.error(err.response?.data?.error || 'Sync failed'),
   });
+
   const removeMutation = useMutation({
     mutationFn: () => api.delete('/sheets'),
     onSuccess: () => {
@@ -48,6 +54,7 @@ export default function AdminSheetsPage() {
     },
     onError: () => toast.error('Failed to remove config'),
   });
+
   const handleSetup = () => {
     if (!sheetUrl || !classId || !department || !semester) {
       toast.error('All fields are required');
@@ -55,16 +62,19 @@ export default function AdminSheetsPage() {
     }
     setupMutation.mutate({ sheetUrl, classId, department, semester: parseInt(semester) });
   };
+
   const getStatusColor = (status) => {
     if (status === 'success') return '#10b981';
     if (status === 'failed') return '#f43f5e';
     return '#64748b';
   };
+
   const getStatusIcon = (status) => {
     if (status === 'success') return <CheckCircle2 size={16} />;
     if (status === 'failed') return <XCircle size={16} />;
     return <Clock size={16} />;
   };
+
   return (
     <div className="dashboard-content">
       <PageHeader 
@@ -83,6 +93,7 @@ export default function AdminSheetsPage() {
           )
         }
       />
+
       {configLoading ? (
         <CardSkel height={300} />
       ) : !config?.isActive ? (
@@ -101,7 +112,7 @@ export default function AdminSheetsPage() {
         </div>
       ) : (
         <div className="grid-2" style={{ gap: 24 }}>
-          {}
+          {/* Config Card */}
           <div className="chart-container" style={{ position: 'relative', overflow: 'hidden' }}>
             <div style={{ 
               position: 'absolute', 
@@ -111,10 +122,12 @@ export default function AdminSheetsPage() {
               height: 3, 
               background: 'linear-gradient(90deg, #10b981, transparent)' 
             }} />
+            
             <div className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <LinkIcon size={18} color="#10b981" />
               Connected Sheet
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Sheet URL</div>
@@ -135,6 +148,7 @@ export default function AdminSheetsPage() {
                   {config.sheetUrl}
                 </a>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Class ID</div>
@@ -149,6 +163,7 @@ export default function AdminSheetsPage() {
                   <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{config.semester}</div>
                 </div>
               </div>
+
               <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                 <button
                   onClick={() => syncMutation.mutate()}
@@ -173,9 +188,11 @@ export default function AdminSheetsPage() {
               </div>
             </div>
           </div>
-          {}
+
+          {/* Status Card */}
           <div className="chart-container">
             <div className="chart-title">Sync Status</div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ 
                 display: 'flex', 
@@ -202,6 +219,7 @@ export default function AdminSheetsPage() {
                   )}
                 </div>
               </div>
+
               {config.lastSyncError && (
                 <div style={{ 
                   padding: '12px 14px', 
@@ -215,6 +233,7 @@ export default function AdminSheetsPage() {
                   <strong>Error:</strong> {config.lastSyncError}
                 </div>
               )}
+
               <div style={{ 
                 padding: '12px 14px', 
                 background: 'rgba(99,102,241,0.08)', 
@@ -229,7 +248,8 @@ export default function AdminSheetsPage() {
           </div>
         </div>
       )}
-      {}
+
+      {/* Setup Modal */}
       <AnimatePresence>
         {showSetup && (
           <motion.div
@@ -259,6 +279,7 @@ export default function AdminSheetsPage() {
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
                 Make sure your Google Sheet is public (Anyone with the link can view). The sheet will auto-sync every Sunday.
               </p>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>GOOGLE SHEET URL</label>
@@ -270,6 +291,7 @@ export default function AdminSheetsPage() {
                     className="input-field"
                   />
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>CLASS ID</label>
@@ -305,6 +327,7 @@ export default function AdminSheetsPage() {
                   </div>
                 </div>
               </div>
+
               <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
                 <button
                   onClick={() => setShowSetup(false)}

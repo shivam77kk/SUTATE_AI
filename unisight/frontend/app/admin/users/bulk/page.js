@@ -5,10 +5,12 @@ import api from '@/lib/axios';
 import { PageHeader } from '@/components/shared/PageHeader';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+
 export default function BulkUserPage() {
   const [file, setFile] = useState(null);
   const [results, setResults] = useState(null);
   const qc = useQueryClient();
+
   const uploadMutation = useMutation({
     mutationFn: (formData) => api.post('/admin/bulk/users', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -23,6 +25,7 @@ export default function BulkUserPage() {
       toast.error(err.response?.data?.error || 'Failed to upload file');
     }
   });
+
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
@@ -34,12 +37,14 @@ export default function BulkUserPage() {
       setResults(null);
     }
   };
+
   const handleUpload = () => {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
     uploadMutation.mutate(formData);
   };
+
   return (
     <div className="dashboard-content">
       <PageHeader 
@@ -51,9 +56,11 @@ export default function BulkUserPage() {
           </Link>
         }
       />
+
       <div className="grid-2" style={{ gap: 24 }}>
         <div className="chart-container">
           <div className="chart-title">Upload CSV</div>
+          
           <div 
             style={{ 
               border: '2px dashed rgba(255,255,255,0.1)', 
@@ -89,12 +96,14 @@ export default function BulkUserPage() {
                 <p style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Maximum file size: 5MB</p>
               </div>
             </label>
+            
             {file && (
               <div style={{ marginTop: 20, padding: '12px 16px', background: 'rgba(16,185,129,0.1)', borderRadius: 8, color: '#34d399', fontSize: 14, fontWeight: 500 }}>
                 Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
               </div>
             )}
           </div>
+
           <button 
             onClick={handleUpload}
             disabled={!file || uploadMutation.isPending}
@@ -109,6 +118,7 @@ export default function BulkUserPage() {
             {uploadMutation.isPending ? <span className="spinner" /> : '🚀 Import Users'}
           </button>
         </div>
+
         <div>
           <div className="chart-container" style={{ marginBottom: 24 }}>
             <div className="chart-title">CSV Template Format</div>
@@ -127,6 +137,7 @@ export default function BulkUserPage() {
               <li><strong>semester</strong>: Required for students (number 1-8)</li>
             </ul>
           </div>
+
           {results && (
             <div className="chart-container" style={{ border: `1px solid ${results.errors?.length > 0 ? 'rgba(244,63,94,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
               <div className="chart-title">Import Results</div>
@@ -140,6 +151,7 @@ export default function BulkUserPage() {
                   <div style={{ fontSize: 12, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Failed</div>
                 </div>
               </div>
+
               {results.errors?.length > 0 && (
                 <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#f43f5e', marginBottom: 8 }}>Error Details:</div>

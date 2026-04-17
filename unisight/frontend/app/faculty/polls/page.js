@@ -1,1 +1,60 @@
-'use client';import { useQuery } from '@tanstack/react-query';import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import { CardSkel } from '@/components/ui/Skeleton';import { SafeTip } from '@/lib/chart';export default function PollsPage() {  const { data, isLoading } = useQuery({    queryKey: ['faculty-polls-history'],    queryFn: () => api.get('/polls/my').then(r => r.data).catch(() => ({ polls: [] })),  });  if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;  const polls = data?.polls || [];  return (    <div className="dashboard-content">      <PageHeader title="📊 Poll History" subtitle="Results from past live polls" />      {polls.length === 0 ? (        <div className="empty-state"><span style={{ fontSize: 32 }}>📊</span><p>No polls yet. Launch one from your class page.</p></div>      ) : (        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>          {polls.map((poll, i) => {            const dist = ([1,2,3,4,5]).map(r => ({ rating: String(r), count: poll.distribution?.[r] || 0 }));            const avg = poll.avgRating;            return (              <div key={i} className="chart-container">                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>                  <div>                    <p style={{ fontWeight: 600, fontSize: 15, color: '#f1f5f9', marginBottom: 3 }}>{poll.question}</p>                    <p style={{ fontSize: 11, color: '#64748b' }}>{poll.className} · {poll.totalResponses || 0} responses</p>                  </div>                  <div style={{ textAlign: 'right' }}>                    <p style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Grotesk',sans-serif" }}>{avg?.toFixed(1) || '--'}</p>                    <p style={{ fontSize: 10, color: '#64748b' }}>avg / 5</p>                  </div>                </div>                <div style={{ height: 140 }}>                  <ResponsiveContainer>                    <BarChart data={dist} barSize={28}>                      <XAxis dataKey="rating" tick={{ fill: '#64748b', fontSize: 11 }} />                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} allowDecimals={false} />                      <Tooltip content={<SafeTip />} />                      <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>                        {dist.map((_, idx) => <Cell key={idx} fill={idx < 2 ? '#f43f5e' : idx === 2 ? '#f59e0b' : '#10b981'} />)}                      </Bar>                    </BarChart>                  </ResponsiveContainer>                </div>              </div>            );          })}        </div>      )}    </div>  );}
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import api from '@/lib/axios';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { CardSkel } from '@/components/ui/Skeleton';
+import { SafeTip } from '@/lib/chart';
+
+export default function PollsPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['faculty-polls-history'],
+    queryFn: () => api.get('/polls/my').then(r => r.data).catch(() => ({ polls: [] })),
+  });
+
+  if (isLoading) return <div className="dashboard-content"><CardSkel height={300} /></div>;
+
+  const polls = data?.polls || [];
+
+  return (
+    <div className="dashboard-content">
+      <PageHeader title="📊 Poll History" subtitle="Results from past live polls" />
+      {polls.length === 0 ? (
+        <div className="empty-state"><span style={{ fontSize: 32 }}>📊</span><p>No polls yet. Launch one from your class page.</p></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {polls.map((poll, i) => {
+            const dist = ([1,2,3,4,5]).map(r => ({ rating: String(r), count: poll.distribution?.[r] || 0 }));
+            const avg = poll.avgRating;
+            return (
+              <div key={i} className="chart-container">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: 15, color: '#f1f5f9', marginBottom: 3 }}>{poll.question}</p>
+                    <p style={{ fontSize: 11, color: '#64748b' }}>{poll.className} · {poll.totalResponses || 0} responses</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Grotesk',sans-serif" }}>{avg?.toFixed(1) || '--'}</p>
+                    <p style={{ fontSize: 10, color: '#64748b' }}>avg / 5</p>
+                  </div>
+                </div>
+                <div style={{ height: 140 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={dist} barSize={28}>
+                      <XAxis dataKey="rating" tick={{ fill: '#64748b', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip content={<SafeTip />} />
+                      <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>
+                        {dist.map((_, idx) => <Cell key={idx} fill={idx < 2 ? '#f43f5e' : idx === 2 ? '#f59e0b' : '#10b981'} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
