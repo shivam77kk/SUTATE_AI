@@ -1,12 +1,1 @@
-import mongoose from 'mongoose';
-const studentGoalSchema = new mongoose.Schema({
-  studentId:       { type: String, required: true, unique: true },
-  targetCgpa:      { type: Number, required: true, min: 0, max: 10 },
-  semester:        { type: Number, required: true },
-  academicYear:    { type: String, required: true },
-  setAt:           { type: Date, default: Date.now },
-  projectedCgpa:   { type: Number, default: null },
-  requiredActions: { type: String, default: null },
-  lastCalculatedAt:{ type: Date, default: null },
-}, { timestamps: true });
-export default mongoose.model('StudentGoal', studentGoalSchema);
+import mongoose from 'mongoose';const studentGoalSchema = new mongoose.Schema({  studentId:       { type: String, required: true, unique: true },  targetCgpa:      { type: Number, required: true, min: 0, max: 10 },  semester:        { type: Number, required: true },  academicYear:    { type: String, required: true },  setAt:           { type: Date, default: Date.now },  projectedCgpa:   { type: Number, default: null },  requiredActions: { type: String, default: null },  lastCalculatedAt:{ type: Date, default: null },}, { timestamps: true });export default mongoose.model('StudentGoal', studentGoalSchema);

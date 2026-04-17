@@ -1,36 +1,1 @@
-'use client';
-
-export default function ActivityScoreCard({ score = 85 }) {
-  const getLevel = (s) => {
-    if (s >= 90) return { label: 'Excellent', color: '#10b981' };
-    if (s >= 75) return { label: 'Good', color: '#3b82f6' };
-    if (s >= 60) return { label: 'Fair', color: '#f59e0b' };
-    return { label: 'Poor', color: '#f43f5e' };
-  };
-  const { label, color } = getLevel(score);
-
-  return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: 'auto' }}>Overall Activity</h3>
-      
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '24px' }}>
-        <div style={{ 
-          width: '72px', height: '72px', borderRadius: '50%', 
-          border: `4px solid ${color}`, 
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '24px', fontWeight: '800', color: 'var(--text-main)'
-        }}>
-          {score}
-        </div>
-        <div>
-          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Status</div>
-          <div style={{ fontSize: '18px', fontWeight: '600', color }}>{label}</div>
-        </div>
-      </div>
-      
-      <div style={{ marginTop: '24px', fontSize: '12px', color: 'var(--text-muted)' }}>
-        Based on assignments (40%), labs (30%), and participation (30%).
-      </div>
-    </div>
-  );
-}
+'use client';export default function ActivityScoreCard({ score = 85 }) {  const getLevel = (s) => {    if (s >= 90) return { label: 'Excellent', color: '#10b981' };    if (s >= 75) return { label: 'Good', color: '#3b82f6' };    if (s >= 60) return { label: 'Fair', color: '#f59e0b' };    return { label: 'Poor', color: '#f43f5e' };  };  const { label, color } = getLevel(score);  return (    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>      <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: 'auto' }}>Overall Activity</h3>      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '24px' }}>        <div style={{           width: '72px', height: '72px', borderRadius: '50%',           border: `4px solid ${color}`,           display: 'flex', alignItems: 'center', justifyContent: 'center',          fontSize: '24px', fontWeight: '800', color: 'var(--text-main)'        }}>          {score}        </div>        <div>          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Status</div>          <div style={{ fontSize: '18px', fontWeight: '600', color }}>{label}</div>        </div>      </div>      <div style={{ marginTop: '24px', fontSize: '12px', color: 'var(--text-muted)' }}>        Based on assignments (40%), labs (30%), and participation (30%).      </div>    </div>  );}

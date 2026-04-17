@@ -1,6 +1,1 @@
-import express from 'express';
-import { authenticate, requireRole } from '../middleware/auth.js';
-import { getAdminLogs } from '../controllers/adminLogController.js';
-const router = express.Router();
-router.get('/', authenticate, requireRole('admin'), getAdminLogs);
-export default router;
+import express from 'express';import { authenticate, requireRole } from '../middleware/auth.js';import { getAdminLogs } from '../controllers/adminLogController.js';const router = express.Router();router.get('/', authenticate, requireRole('admin'), getAdminLogs);export default router;

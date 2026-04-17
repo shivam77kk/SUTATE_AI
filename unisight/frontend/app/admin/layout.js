@@ -1,54 +1,1 @@
-'use client';
-import Sidebar from '@/components/shared/Sidebar';
-import AdminThreeBackground from '@/components/shared/AdminThreeBackground';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import useAuthStore from '@/store/authStore';
-import api from '@/lib/axios';
-
-export default function AdminLayout({ children }) {
-  const { user, setUser } = useAuthStore();
-  const router = useRouter();
-  const [verified, setVerified] = useState(false);
-
-  useEffect(() => {
-    // Always re-verify session from backend on mount
-    api.get('/auth/me')
-      .then(({ data }) => {
-        setUser(data.user);
-        if (data.user.isFirstLogin) {
-          router.replace('/change-password');
-        } else if (data.user.role !== 'admin') {
-          router.replace(`/${data.user.role}/dashboard`);
-        } else {
-          setVerified(true);
-        }
-      })
-      .catch(() => {
-        router.replace('/login');
-      });
-  }, []);
-
-  if (!verified) return null;
-
-  return (
-    <div className="dashboard-layout" style={{ position: 'relative' }}>
-      <AdminThreeBackground />
-      {/* Mesh gradient overlay */}
-      <div style={{ 
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
-        background: `
-          radial-gradient(ellipse at 10% 20%, rgba(245,158,11,0.05) 0%, transparent 50%),
-          radial-gradient(ellipse at 80% 80%, rgba(99,102,241,0.04) 0%, transparent 50%)
-        `,
-      }} />
-      <Sidebar />
-      <main style={{ 
-        flex: 1, overflowY: 'auto', minHeight: '100vh', 
-        background: 'transparent', position: 'relative', zIndex: 1,
-      }}>
-        {children}
-      </main>
-    </div>
-  );
-}
+'use client';import Sidebar from '@/components/shared/Sidebar';import AdminThreeBackground from '@/components/shared/AdminThreeBackground';import { useEffect, useState } from 'react';import { useRouter } from 'next/navigation';import useAuthStore from '@/store/authStore';import api from '@/lib/axios';export default function AdminLayout({ children }) {  const { user, setUser } = useAuthStore();  const router = useRouter();  const [verified, setVerified] = useState(false);  useEffect(() => {    api.get('/auth/me')      .then(({ data }) => {        setUser(data.user);        if (data.user.isFirstLogin) {          router.replace('/change-password');        } else if (data.user.role !== 'admin') {          router.replace(`/${data.user.role}/dashboard`);        } else {          setVerified(true);        }      })      .catch(() => {        router.replace('/login');      });  }, []);  if (!verified) return null;  return (    <div className="dashboard-layout" style={{ position: 'relative' }}>      <AdminThreeBackground />      {}      <div style={{         position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,        background: `          radial-gradient(ellipse at 10% 20%, rgba(245,158,11,0.05) 0%, transparent 50%),          radial-gradient(ellipse at 80% 80%, rgba(99,102,241,0.04) 0%, transparent 50%)        `,      }} />      <Sidebar />      <main style={{         flex: 1, overflowY: 'auto', minHeight: '100vh',         background: 'transparent', position: 'relative', zIndex: 1,      }}>        {children}      </main>    </div>  );}

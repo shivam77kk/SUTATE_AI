@@ -1,72 +1,1 @@
-import React from 'react';
-
-export default function DropoutGauge({ score, tier, size = 'md' }) {
-  const validScore = score !== undefined && score !== null ? score : 0;
-  
-  const dimensions = {
-    sm: { size: 64, ring: 3, radius: 28, fontSize: '12px' },
-    md: { size: 100, ring: 6, radius: 42, fontSize: '20px' },
-    lg: { size: 140, ring: 8, radius: 60, fontSize: '32px' },
-  };
-  
-  const dim = dimensions[size] || dimensions.md;
-  const circumference = 2 * Math.PI * dim.radius;
-  const strokeDashoffset = circumference - (validScore / 100) * circumference;
-
-  const colors = {
-    LOW:      'var(--emerald)',
-    MEDIUM:   'var(--amber)',
-    HIGH:     'var(--rose)',
-    CRITICAL: '#be123c', // Deep red
-  };
-  const color = colors[tier] || 'var(--text-muted)';
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: dim.size, height: dim.size }}>
-        <svg 
-          width={dim.size} height={dim.size} 
-          style={{ transform: 'rotate(-90deg)' }}
-        >
-          <circle 
-            cx={dim.size / 2} cy={dim.size / 2} r={dim.radius} 
-            fill="transparent" stroke="var(--border)" strokeWidth={dim.ring} 
-          />
-          <circle 
-            cx={dim.size / 2} cy={dim.size / 2} r={dim.radius} 
-            fill="transparent" 
-            stroke={color} 
-            strokeWidth={dim.ring}
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            style={{ 
-              transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)',
-              filter: `drop-shadow(0 0 4px ${color}40)`
-            }}
-          />
-        </svg>
-        <div style={{ 
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'Space Grotesk', sans-serif", fontWeight: '700', color: 'var(--text-primary)',
-          fontSize: dim.fontSize
-        }}>
-          {validScore}%
-        </div>
-      </div>
-      {size !== 'sm' && (
-        <div style={{ textAlign: 'center', marginTop: '12px' }}>
-          <div style={{ 
-            fontSize: '11px', fontWeight: '800', letterSpacing: '0.1em', 
-            color: color, textTransform: 'uppercase', marginBottom: '2px' 
-          }}>
-            {tier || 'Processing'}
-          </div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '500' }}>
-            Dropout Probability
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+import React from 'react';export default function DropoutGauge({ score, tier, size = 'md' }) {  const validScore = score !== undefined && score !== null ? score : 0;  const dimensions = {    sm: { size: 64, ring: 3, radius: 28, fontSize: '12px' },    md: { size: 100, ring: 6, radius: 42, fontSize: '20px' },    lg: { size: 140, ring: 8, radius: 60, fontSize: '32px' },  };  const dim = dimensions[size] || dimensions.md;  const circumference = 2 * Math.PI * dim.radius;  const strokeDashoffset = circumference - (validScore / 100) * circumference;  const colors = {    LOW:      'var(--emerald)',    MEDIUM:   'var(--amber)',    HIGH:     'var(--rose)',    CRITICAL: '#be123c',   };  const color = colors[tier] || 'var(--text-muted)';  return (    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>      <div style={{ position: 'relative', width: dim.size, height: dim.size }}>        <svg           width={dim.size} height={dim.size}           style={{ transform: 'rotate(-90deg)' }}        >          <circle             cx={dim.size / 2} cy={dim.size / 2} r={dim.radius}             fill="transparent" stroke="var(--border)" strokeWidth={dim.ring}           />          <circle             cx={dim.size / 2} cy={dim.size / 2} r={dim.radius}             fill="transparent"             stroke={color}             strokeWidth={dim.ring}            strokeDasharray={circumference}            strokeDashoffset={strokeDashoffset}            strokeLinecap="round"            style={{               transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)',              filter: `drop-shadow(0 0 4px ${color}40)`            }}          />        </svg>        <div style={{           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',          fontFamily: "'Space Grotesk', sans-serif", fontWeight: '700', color: 'var(--text-primary)',          fontSize: dim.fontSize        }}>          {validScore}%        </div>      </div>      {size !== 'sm' && (        <div style={{ textAlign: 'center', marginTop: '12px' }}>          <div style={{             fontSize: '11px', fontWeight: '800', letterSpacing: '0.1em',             color: color, textTransform: 'uppercase', marginBottom: '2px'           }}>            {tier || 'Processing'}          </div>          <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '500' }}>            Dropout Probability          </div>        </div>      )}    </div>  );}

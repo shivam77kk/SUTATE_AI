@@ -1,37 +1,1 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-
-export const authenticate = async (req, res, next) => {
-  try {
-    const token = req.cookies?.token ||
-      req.headers?.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'Authentication required' });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password').lean();
-    if (!user) return res.status(401).json({ error: 'User not found' });
-
-    req.user = {
-      userId: user._id.toString(),
-      email: user.email,
-      role: user.role,
-      name: user.name,
-      department: user.department,
-      studentId: user.studentId,
-    };
-    next();
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
-  }
-};
-
-export const requireRole = (...roles) => (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (!roles.includes(req.user.role)) {
-    console.error(`[Auth] Role mismatch: User ${req.user.email} has role "${req.user.role}" but needs one of: ${roles.join(', ')}`);
-    return res.status(403).json({ error: 'Access denied', requiredRole: roles, userRole: req.user.role });
-  }
-  next();
-};
+import jwt from 'jsonwebtoken';import User from '../models/User.js';export const authenticate = async (req, res, next) => {  try {    const token = req.cookies?.token ||      req.headers?.authorization?.replace('Bearer ', '');    if (!token) return res.status(401).json({ error: 'Authentication required' });    const decoded = jwt.verify(token, process.env.JWT_SECRET);    const user = await User.findById(decoded.userId).select('-password').lean();    if (!user) return res.status(401).json({ error: 'User not found' });    req.user = {      userId: user._id.toString(),      email: user.email,      role: user.role,      name: user.name,      department: user.department,      studentId: user.studentId,    };    next();  } catch {    res.status(401).json({ error: 'Invalid or expired token' });  }};export const requireRole = (...roles) => (req, res, next) => {  if (!req.user) {    return res.status(401).json({ error: 'Authentication required' });  }  if (!roles.includes(req.user.role)) {    console.error(`[Auth] Role mismatch: User ${req.user.email} has role "${req.user.role}" but needs one of: ${roles.join(', ')}`);    return res.status(403).json({ error: 'Access denied', requiredRole: roles, userRole: req.user.role });  }  next();};

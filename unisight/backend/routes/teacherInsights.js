@@ -1,8 +1,1 @@
-import express from 'express';
-import { authenticate, requireRole } from '../middleware/auth.js';
-import { getMyEffectiveness, getEffectivenessHistory } from '../controllers/teacherInsightController.js';
-
-const router = express.Router();
-router.get('/me', authenticate, requireRole('faculty'), getMyEffectiveness);
-router.get('/history', authenticate, requireRole('faculty'), getEffectivenessHistory);
-export default router;
+import express from 'express';import { authenticate, requireRole } from '../middleware/auth.js';import { getMyEffectiveness, getEffectivenessHistory } from '../controllers/teacherInsightController.js';const router = express.Router();router.get('/me', authenticate, requireRole('faculty'), getMyEffectiveness);router.get('/history', authenticate, requireRole('faculty'), getEffectivenessHistory);export default router;

@@ -1,226 +1,1 @@
-'use client';
-import { useState, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
-import api from '@/lib/axios';
-import { PageHeader } from '@/components/shared/PageHeader';
-import useAuthStore from '@/store/authStore';
-import useSocket from '@/hooks/useSocket';
-import toast from 'react-hot-toast';
-
-const AGENT_NAMES = ['CSV Parser', 'Risk Analyser', 'Attendance Scorer', 'AI Narrator', 'Alert Engine'];
-const STEPS = ['Upload CSV', 'Validate', 'AI Processing', 'Complete'];
-
-function AgentStream({ uploadId }) {
-  const [agents, setAgents] = useState(AGENT_NAMES.map(n => ({ name: n, status: 'pending', progress: 0 })));
-
-  useSocket('join-upload', uploadId, {
-    'agent-progress': ({ agent, progress, status }) => {
-      setAgents(prev => prev.map(a => a.name === agent ? { ...a, progress, status } : a));
-    },
-  });
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {agents.map((agent, i) => (
-        <div key={i}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-            <span style={{ color: '#f1f5f9', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-              {agent.status === 'done' ? '✅' : agent.status === 'running' ? <span className="spinner" /> : '⏳'}
-              {agent.name}
-            </span>
-            <span style={{ fontFamily: 'monospace', fontSize: 11, color: agent.status === 'done' ? '#10b981' : '#64748b' }}>
-              {agent.status === 'done' ? 'Complete' : agent.status === 'running' ? `${agent.progress}%` : 'Queued'}
-            </span>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 999, height: 4 }}>
-            <motion.div animate={{ width: `${agent.progress}%` }} transition={{ duration: 0.4 }}
-              style={{ height: '100%', background: agent.status === 'done' ? '#10b981' : '#6366f1', borderRadius: 999 }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function UploadPage() {
-  const { user } = useAuthStore();
-  const [step, setStep] = useState(0);
-  const [file, setFile] = useState(null);
-  const [formData, setFormData] = useState({ semester: '', classId: '', year: new Date().getFullYear() });
-  const [validation, setValidation] = useState(null);
-  const [uploadId, setUploadId] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const inputRef = useRef();
-
-  const validateMutation = useMutation({
-    mutationFn: async () => {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('semester', formData.semester);
-      fd.append('classId', formData.classId);
-      fd.append('year', formData.year);
-      fd.append('department', user?.department || '');
-      const { data } = await api.post('/upload/validate', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      return data;
-    },
-    onSuccess: (data) => { setValidation(data); setStep(1); },
-    onError: () => toast.error('Validation failed. Check your CSV format.'),
-  });
-
-  const processMutation = useMutation({
-    mutationFn: () => api.post('/upload', { validationId: validation?.validationId, classId: formData.classId, department: user?.department || '', semester: formData.semester }),
-    onSuccess: (data) => { setUploadId(data.data?.uploadId || 'upload'); setStep(2); },
-    onError: () => toast.error('Processing failed. Try again.'),
-  });
-
-  const handleFile = (f) => {
-    if (!f) return;
-    if (!f.name.endsWith('.csv')) { toast.error('Only CSV files are accepted'); return; }
-    setFile(f);
-  };
-
-  return (
-    <div className="dashboard-content">
-      <PageHeader title="📤 Upload CSV" subtitle="Upload student data and let SUTATE AI analyse it" />
-
-      {/* Step indicators */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 32, background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 4 }}>
-        {STEPS.map((s, i) => (
-          <div key={i} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, textAlign: 'center', fontSize: 12, fontWeight: 600,
-            background: step === i ? 'rgba(99,102,241,0.15)' : 'transparent',
-            color: step === i ? '#818cf8' : i < step ? '#10b981' : '#64748b',
-          }}>
-            {i < step ? '✓ ' : ''}{s}
-          </div>
-        ))}
-      </div>
-
-      <AnimatePresence mode="wait">
-        {step === 0 && (
-          <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="chart-container" style={{ marginBottom: 20 }}>
-              {/* Drop zone */}
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
-                onClick={() => inputRef.current?.click()}
-                style={{
-                  border: `2px dashed ${dragOver ? '#6366f1' : file ? '#10b981' : 'rgba(255,255,255,0.1)'}`,
-                  borderRadius: 16, padding: 48, textAlign: 'center', cursor: 'pointer',
-                  background: dragOver ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.02)',
-                  transition: 'all 0.2s', marginBottom: 20,
-                }}
-              >
-                <input ref={inputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />
-                <div style={{ fontSize: 36, marginBottom: 12 }}>{file ? '✅' : '📂'}</div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: file ? '#10b981' : '#f1f5f9', marginBottom: 4 }}>
-                  {file ? file.name : 'Drop CSV here or click to select'}
-                </p>
-                <p style={{ fontSize: 12, color: '#64748b' }}>
-                  {file ? `${(file.size / 1024).toFixed(1)} KB` : 'Required columns: studentId, subject, marks, maxMarks, attendancePercent'}
-                </p>
-              </div>
-
-              {/* Fields */}
-              <div className="grid-3" style={{ gap: 16, marginBottom: 20 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>SEMESTER</label>
-                  <input value={formData.semester} onChange={e => setFormData(p => ({ ...p, semester: e.target.value }))}
-                    placeholder="e.g. Fall 2025" className="input-field" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>CLASS ID</label>
-                  <input value={formData.classId} onChange={e => setFormData(p => ({ ...p, classId: e.target.value }))}
-                    placeholder="e.g. CSE-A" className="input-field" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>YEAR</label>
-                  <input type="number" value={formData.year} onChange={e => setFormData(p => ({ ...p, year: e.target.value }))} className="input-field" />
-                </div>
-              </div>
-
-              <button onClick={() => validateMutation.mutate()} disabled={!file || !formData.semester || !formData.classId || validateMutation.isPending} style={{
-                width: '100%', padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',
-                background: file ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.04)',
-                color: file ? 'white' : '#64748b', cursor: file ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,
-              }}>
-                {validateMutation.isPending ? <><span className="spinner" />Validating...</> : 'Validate CSV →'}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 1 && validation && (
-          <motion.div key="validate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="chart-container" style={{ marginBottom: 20 }}>
-              <div className="chart-title">📋 Validation Report</div>
-              <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>
-                {[
-                  { label: 'Total rows', value: validation.totalRows, color: '#6366f1' },
-                  { label: 'Valid rows', value: validation.validRows, color: '#10b981' },
-                  { label: 'Error rows', value: validation.errorRows, color: validation.errorRows > 0 ? '#f43f5e' : '#10b981' },
-                ].map(c => (
-                  <div key={c.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: c.color, fontFamily: "'Space Grotesk',sans-serif" }}>{c.value ?? '--'}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{c.label}</div>
-                  </div>
-                ))}
-              </div>
-              {validation.errors?.length > 0 && (
-                <div style={{ background: 'rgba(244,63,94,0.05)', border: '1px solid rgba(244,63,94,0.15)', borderRadius: 10, padding: 14, marginBottom: 16, maxHeight: 160, overflowY: 'auto' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#fb7185', marginBottom: 8, textTransform: 'uppercase' }}>Errors found:</p>
-                  {validation.errors.slice(0, 20).map((e, i) => <p key={i} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 3 }}>{e}</p>)}
-                </div>
-              )}
-              {validation.warnings?.length > 0 && (
-                <div style={{ background: 'rgba(245,158,11,0.05)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                  {validation.warnings.slice(0, 5).map((w, i) => <p key={i} style={{ fontSize: 12, color: '#f59e0b', marginBottom: 3 }}>⚠ {w}</p>)}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setStep(0)} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 44 }}>← Re-upload</button>
-                <button onClick={() => processMutation.mutate()} disabled={processMutation.isPending || validation.validRows === 0} style={{
-                  flex: 1, padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',
-                  background: 'linear-gradient(135deg,#6366f1,#7c3aed)', color: 'white', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,
-                }}>
-                  {processMutation.isPending ? <><span className="spinner" />Starting...</> : `Process ${validation.validRows} valid rows →`}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 2 && (
-          <motion.div key="process" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="chart-container" style={{ marginBottom: 20 }}>
-              <div className="chart-title">🤖 AI Processing Agents</div>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Five AI agents are working in parallel to analyse your data...</p>
-              <AgentStream uploadId={uploadId} />
-              <button onClick={() => setStep(3)} style={{ marginTop: 20, width: '100%', padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 48 }}>
-                Done — View results →
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 3 && (
-          <motion.div key="complete" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-            <div className="chart-container" style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-              <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, color: '#f1f5f9', marginBottom: 10 }}>Upload complete!</h3>
-              <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24 }}>Your students' data has been analysed. At-risk alerts have been generated.</p>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <a href="/faculty/dashboard" style={{ padding: '10px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', fontWeight: 700, fontSize: 14, color: 'white', textDecoration: 'none', minHeight: 44, display: 'flex', alignItems: 'center' }}>View Dashboard →</a>
-                <button onClick={() => { setStep(0); setFile(null); setValidation(null); }} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 44 }}>Upload another</button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+'use client';import { useState, useRef } from 'react';import { useMutation } from '@tanstack/react-query';import { motion, AnimatePresence } from 'framer-motion';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import useAuthStore from '@/store/authStore';import useSocket from '@/hooks/useSocket';import toast from 'react-hot-toast';const AGENT_NAMES = ['CSV Parser', 'Risk Analyser', 'Attendance Scorer', 'AI Narrator', 'Alert Engine'];const STEPS = ['Upload CSV', 'Validate', 'AI Processing', 'Complete'];function AgentStream({ uploadId }) {  const [agents, setAgents] = useState(AGENT_NAMES.map(n => ({ name: n, status: 'pending', progress: 0 })));  useSocket('join-upload', uploadId, {    'agent-progress': ({ agent, progress, status }) => {      setAgents(prev => prev.map(a => a.name === agent ? { ...a, progress, status } : a));    },  });  return (    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>      {agents.map((agent, i) => (        <div key={i}>          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>            <span style={{ color: '#f1f5f9', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>              {agent.status === 'done' ? '✅' : agent.status === 'running' ? <span className="spinner" /> : '⏳'}              {agent.name}            </span>            <span style={{ fontFamily: 'monospace', fontSize: 11, color: agent.status === 'done' ? '#10b981' : '#64748b' }}>              {agent.status === 'done' ? 'Complete' : agent.status === 'running' ? `${agent.progress}%` : 'Queued'}            </span>          </div>          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 999, height: 4 }}>            <motion.div animate={{ width: `${agent.progress}%` }} transition={{ duration: 0.4 }}              style={{ height: '100%', background: agent.status === 'done' ? '#10b981' : '#6366f1', borderRadius: 999 }} />          </div>        </div>      ))}    </div>  );}export default function UploadPage() {  const { user } = useAuthStore();  const [step, setStep] = useState(0);  const [file, setFile] = useState(null);  const [formData, setFormData] = useState({ semester: '', classId: '', year: new Date().getFullYear() });  const [validation, setValidation] = useState(null);  const [uploadId, setUploadId] = useState(null);  const [dragOver, setDragOver] = useState(false);  const inputRef = useRef();  const validateMutation = useMutation({    mutationFn: async () => {      const fd = new FormData();      fd.append('file', file);      fd.append('semester', formData.semester);      fd.append('classId', formData.classId);      fd.append('year', formData.year);      fd.append('department', user?.department || '');      const { data } = await api.post('/upload/validate', fd, { headers: { 'Content-Type': 'multipart/form-data' } });      return data;    },    onSuccess: (data) => { setValidation(data); setStep(1); },    onError: () => toast.error('Validation failed. Check your CSV format.'),  });  const processMutation = useMutation({    mutationFn: () => api.post('/upload', { validationId: validation?.validationId, classId: formData.classId, department: user?.department || '', semester: formData.semester }),    onSuccess: (data) => { setUploadId(data.data?.uploadId || 'upload'); setStep(2); },    onError: () => toast.error('Processing failed. Try again.'),  });  const handleFile = (f) => {    if (!f) return;    if (!f.name.endsWith('.csv')) { toast.error('Only CSV files are accepted'); return; }    setFile(f);  };  return (    <div className="dashboard-content">      <PageHeader title="📤 Upload CSV" subtitle="Upload student data and let SUTATE AI analyse it" />      {}      <div style={{ display: 'flex', gap: 0, marginBottom: 32, background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 4 }}>        {STEPS.map((s, i) => (          <div key={i} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, textAlign: 'center', fontSize: 12, fontWeight: 600,            background: step === i ? 'rgba(99,102,241,0.15)' : 'transparent',            color: step === i ? '#818cf8' : i < step ? '#10b981' : '#64748b',          }}>            {i < step ? '✓ ' : ''}{s}          </div>        ))}      </div>      <AnimatePresence mode="wait">        {step === 0 && (          <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>            <div className="chart-container" style={{ marginBottom: 20 }}>              {/* Drop zone */}              <div                onDragOver={e => { e.preventDefault(); setDragOver(true); }}                onDragLeave={() => setDragOver(false)}                onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}                onClick={() => inputRef.current?.click()}                style={{                  border: `2px dashed ${dragOver ? '#6366f1' : file ? '#10b981' : 'rgba(255,255,255,0.1)'}`,                  borderRadius: 16, padding: 48, textAlign: 'center', cursor: 'pointer',                  background: dragOver ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.02)',                  transition: 'all 0.2s', marginBottom: 20,                }}              >                <input ref={inputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />                <div style={{ fontSize: 36, marginBottom: 12 }}>{file ? '✅' : '📂'}</div>                <p style={{ fontSize: 15, fontWeight: 600, color: file ? '#10b981' : '#f1f5f9', marginBottom: 4 }}>                  {file ? file.name : 'Drop CSV here or click to select'}                </p>                <p style={{ fontSize: 12, color: '#64748b' }}>                  {file ? `${(file.size / 1024).toFixed(1)} KB` : 'Required columns: studentId, subject, marks, maxMarks, attendancePercent'}                </p>              </div>              {}              <div className="grid-3" style={{ gap: 16, marginBottom: 20 }}>                <div>                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>SEMESTER</label>                  <input value={formData.semester} onChange={e => setFormData(p => ({ ...p, semester: e.target.value }))}                    placeholder="e.g. Fall 2025" className="input-field" />                </div>                <div>                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>CLASS ID</label>                  <input value={formData.classId} onChange={e => setFormData(p => ({ ...p, classId: e.target.value }))}                    placeholder="e.g. CSE-A" className="input-field" />                </div>                <div>                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6, letterSpacing: '0.07em' }}>YEAR</label>                  <input type="number" value={formData.year} onChange={e => setFormData(p => ({ ...p, year: e.target.value }))} className="input-field" />                </div>              </div>              <button onClick={() => validateMutation.mutate()} disabled={!file || !formData.semester || !formData.classId || validateMutation.isPending} style={{                width: '100%', padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',                background: file ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.04)',                color: file ? 'white' : '#64748b', cursor: file ? 'pointer' : 'not-allowed',                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,              }}>                {validateMutation.isPending ? <><span className="spinner" />Validating...</> : 'Validate CSV →'}              </button>            </div>          </motion.div>        )}        {step === 1 && validation && (          <motion.div key="validate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>            <div className="chart-container" style={{ marginBottom: 20 }}>              <div className="chart-title">📋 Validation Report</div>              <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>                {[                  { label: 'Total rows', value: validation.totalRows, color: '#6366f1' },                  { label: 'Valid rows', value: validation.validRows, color: '#10b981' },                  { label: 'Error rows', value: validation.errorRows, color: validation.errorRows > 0 ? '#f43f5e' : '#10b981' },                ].map(c => (                  <div key={c.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>                    <div style={{ fontSize: 28, fontWeight: 800, color: c.color, fontFamily: "'Space Grotesk',sans-serif" }}>{c.value ?? '--'}</div>                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{c.label}</div>                  </div>                ))}              </div>              {validation.errors?.length > 0 && (                <div style={{ background: 'rgba(244,63,94,0.05)', border: '1px solid rgba(244,63,94,0.15)', borderRadius: 10, padding: 14, marginBottom: 16, maxHeight: 160, overflowY: 'auto' }}>                  <p style={{ fontSize: 11, fontWeight: 700, color: '#fb7185', marginBottom: 8, textTransform: 'uppercase' }}>Errors found:</p>                  {validation.errors.slice(0, 20).map((e, i) => <p key={i} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 3 }}>{e}</p>)}                </div>              )}              {validation.warnings?.length > 0 && (                <div style={{ background: 'rgba(245,158,11,0.05)', borderRadius: 10, padding: 14, marginBottom: 16 }}>                  {validation.warnings.slice(0, 5).map((w, i) => <p key={i} style={{ fontSize: 12, color: '#f59e0b', marginBottom: 3 }}>⚠ {w}</p>)}                </div>              )}              <div style={{ display: 'flex', gap: 10 }}>                <button onClick={() => setStep(0)} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 44 }}>← Re-upload</button>                <button onClick={() => processMutation.mutate()} disabled={processMutation.isPending || validation.validRows === 0} style={{                  flex: 1, padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',                  background: 'linear-gradient(135deg,#6366f1,#7c3aed)', color: 'white', cursor: 'pointer',                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,                }}>                  {processMutation.isPending ? <><span className="spinner" />Starting...</> : `Process ${validation.validRows} valid rows →`}                </button>              </div>            </div>          </motion.div>        )}        {step === 2 && (          <motion.div key="process" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>            <div className="chart-container" style={{ marginBottom: 20 }}>              <div className="chart-title">🤖 AI Processing Agents</div>              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Five AI agents are working in parallel to analyse your data...</p>              <AgentStream uploadId={uploadId} />              <button onClick={() => setStep(3)} style={{ marginTop: 20, width: '100%', padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 14, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 48 }}>                Done — View results →              </button>            </div>          </motion.div>        )}        {step === 3 && (          <motion.div key="complete" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>            <div className="chart-container" style={{ textAlign: 'center', padding: '48px 24px' }}>              <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>              <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, color: '#f1f5f9', marginBottom: 10 }}>Upload complete!</h3>              <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24 }}>Your students' data has been analysed. At-risk alerts have been generated.</p>              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>                <a href="/faculty/dashboard" style={{ padding: '10px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', fontWeight: 700, fontSize: 14, color: 'white', textDecoration: 'none', minHeight: 44, display: 'flex', alignItems: 'center' }}>View Dashboard →</a>                <button onClick={() => { setStep(0); setFile(null); setValidation(null); }} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', minHeight: 44 }}>Upload another</button>              </div>            </div>          </motion.div>        )}      </AnimatePresence>    </div>  );}

@@ -1,17 +1,1 @@
-import mongoose from 'mongoose';
-
-const studentFeedbackSchema = new mongoose.Schema({
-  studentId:   { type: String, required: true },
-  classId:     { type: String, required: true },
-  semester:    { type: Number, required: true },
-  uploadId:    { type: String, required: true },
-  responses:   [{
-    subject:          { type: String, required: true },
-    difficultyRating: { type: Number, min: 1, max: 5, required: true },
-    feedbackText:     { type: String, default: '' },
-    sentimentScore:   { type: Number, default: null },
-  }],
-  submittedAt: { type: Date, default: Date.now },
-}, { timestamps: true });
-
-export default mongoose.model('StudentFeedback', studentFeedbackSchema);
+import mongoose from 'mongoose';const studentFeedbackSchema = new mongoose.Schema({  studentId:   { type: String, required: true },  classId:     { type: String, required: true },  semester:    { type: Number, required: true },  uploadId:    { type: String, required: true },  responses:   [{    subject:          { type: String, required: true },    difficultyRating: { type: Number, min: 1, max: 5, required: true },    feedbackText:     { type: String, default: '' },    sentimentScore:   { type: Number, default: null },  }],  submittedAt: { type: Date, default: Date.now },}, { timestamps: true });export default mongoose.model('StudentFeedback', studentFeedbackSchema);

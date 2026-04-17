@@ -1,52 +1,1 @@
-import React from 'react';
-import { Award, AlertTriangle, Lightbulb } from 'lucide-react';
-
-export default function TeacherEffectivenessPanel({ insights }) {
-  if (!insights) return null;
-  const { effectivenessScore, classPassRate, deptAvgPassRate, classAvgScore, effectivenessSummary, teachingRecommendations } = insights;
-  
-  return (
-    <div className="bg-white rounded-xl shadow border border-gray-100 p-6">
-      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <Award className="text-indigo-600" /> Teaching Effectiveness Analytics
-      </h3>
-      
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-indigo-50 p-4 rounded-lg">
-          <p className="text-sm text-indigo-900 font-semibold">Effectiveness Score</p>
-          <p className="text-3xl font-black text-indigo-700">{effectivenessScore}<span className="text-sm font-medium">/100</span></p>
-        </div>
-        <div className="bg-emerald-50 p-4 rounded-lg">
-          <p className="text-sm text-emerald-900 font-semibold">Class Pass Rate</p>
-          <p className="text-3xl font-black text-emerald-700">{classPassRate}%</p>
-          <p className="text-xs text-emerald-700 mt-1">Dept Avg: {deptAvgPassRate}%</p>
-        </div>
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <p className="text-sm text-blue-900 font-semibold">Class Avg Score</p>
-          <p className="text-3xl font-black text-blue-700">{classAvgScore}<span className="text-sm font-medium">/160</span></p>
-        </div>
-      </div>
-
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-        <p className="text-sm text-gray-700 font-medium italic">"{effectivenessSummary}"</p>
-      </div>
-
-      <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
-        <Lightbulb size={18} className="text-yellow-500" /> AI Recommendations
-      </h4>
-      <div className="space-y-3">
-        {teachingRecommendations?.map((r, i) => (
-          <div key={i} className="flex gap-3 bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-            <div className={`mt-0.5 ${r.priority === 'HIGH' ? 'text-red-500' : r.priority === 'MEDIUM' ? 'text-yellow-500' : 'text-blue-500'}`}>
-              <AlertTriangle size={16} />
-            </div>
-            <div>
-              <p className="font-bold text-gray-900 text-sm">{r.title}</p>
-              <p className="text-sm text-gray-600">{r.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import React from 'react';import { Award, AlertTriangle, Lightbulb } from 'lucide-react';export default function TeacherEffectivenessPanel({ insights }) {  if (!insights) return null;  const { effectivenessScore, classPassRate, deptAvgPassRate, classAvgScore, effectivenessSummary, teachingRecommendations } = insights;  return (    <div className="bg-white rounded-xl shadow border border-gray-100 p-6">      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">        <Award className="text-indigo-600" /> Teaching Effectiveness Analytics      </h3>      <div className="grid grid-cols-3 gap-4 mb-6">        <div className="bg-indigo-50 p-4 rounded-lg">          <p className="text-sm text-indigo-900 font-semibold">Effectiveness Score</p>          <p className="text-3xl font-black text-indigo-700">{effectivenessScore}<span className="text-sm font-medium">/100</span></p>        </div>        <div className="bg-emerald-50 p-4 rounded-lg">          <p className="text-sm text-emerald-900 font-semibold">Class Pass Rate</p>          <p className="text-3xl font-black text-emerald-700">{classPassRate}%</p>          <p className="text-xs text-emerald-700 mt-1">Dept Avg: {deptAvgPassRate}%</p>        </div>        <div className="bg-blue-50 p-4 rounded-lg">          <p className="text-sm text-blue-900 font-semibold">Class Avg Score</p>          <p className="text-3xl font-black text-blue-700">{classAvgScore}<span className="text-sm font-medium">/160</span></p>        </div>      </div>      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">        <p className="text-sm text-gray-700 font-medium italic">"{effectivenessSummary}"</p>      </div>      <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-3">        <Lightbulb size={18} className="text-yellow-500" /> AI Recommendations      </h4>      <div className="space-y-3">        {teachingRecommendations?.map((r, i) => (          <div key={i} className="flex gap-3 bg-white border border-gray-100 p-3 rounded-lg shadow-sm">            <div className={`mt-0.5 ${r.priority === 'HIGH' ? 'text-red-500' : r.priority === 'MEDIUM' ? 'text-yellow-500' : 'text-blue-500'}`}>              <AlertTriangle size={16} />            </div>            <div>              <p className="font-bold text-gray-900 text-sm">{r.title}</p>              <p className="text-sm text-gray-600">{r.description}</p>            </div>          </div>        ))}      </div>    </div>  );}

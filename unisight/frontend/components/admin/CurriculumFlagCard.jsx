@@ -1,70 +1,1 @@
-import React from 'react';
-import { AlertCircle, AlertOctagon, CheckCircle2, TrendingDown, Users, Calendar, Sparkles } from 'lucide-react';
-
-export default function CurriculumFlagCard({ flag = {} }) {
-  const isCritical = flag.flagSeverity === 'critical';
-  const isConcern = flag.flagSeverity === 'concern';
-  
-  const statusColor = isCritical ? '#f43f5e' : isConcern ? '#f59e0b' : '#10b981';
-  const statusBg = isCritical ? 'rgba(244,63,94,0.1)' : isConcern ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)';
-
-  return (
-    <div className="relative group bg-white/5 border border-white/10 rounded-[2rem] p-8 backdrop-blur-3xl transition-all duration-500 hover:bg-white/10 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">
-      <div className={`absolute top-0 right-10 w-24 h-1 rounded-b-full shadow-[0_5px_15px_rgba(0,0,0,0.3)]`} style={{ background: statusColor }} />
-      
-      <div className="flex justify-between items-start mb-8">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
-            {isCritical ? <AlertOctagon size={28} className="text-rose-500 animate-pulse" /> : isConcern ? <AlertCircle size={28} className="text-amber-500" /> : <CheckCircle2 size={28} className="text-emerald-500" />}
-          </div>
-          <div>
-            <h3 className="text-2xl font-black text-white tracking-tight leading-none mb-2">{flag.subject}</h3>
-            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">{flag.department} DIV</div>
-          </div>
-        </div>
-        <div className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border" style={{ color: statusColor, borderColor: `${statusColor}44`, background: statusBg }}>
-          {flag.flagSeverity} SEVERITY
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {[
-          { icon: <TrendingDown size={14} />, label: 'Fail Rate', value: `${flag.avgFailureRate}%`, color: isCritical ? 'text-rose-500' : 'text-white' },
-          { icon: <Calendar size={14} />, label: 'Flag Count', value: flag.semestersFlagged, color: 'text-white' },
-          { icon: <Users size={14} />, label: 'Affected', value: `${flag.totalFailed}/${flag.totalStudents}`, color: 'text-white' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-black/20 rounded-2xl p-4 border border-white/5 flex flex-col items-center text-center">
-            <div className="text-gray-500 mb-1">{stat.icon}</div>
-            <div className={`text-lg font-black ${stat.color}`}>{stat.value}</div>
-            <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        <div className="bg-white/5 rounded-2xl p-6 border border-white/5 relative overflow-hidden group/context">
-          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/50" />
-          <div className="flex items-center gap-2 mb-3">
-             <Sparkles size={14} className="text-indigo-400" />
-             <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">AI Synthesis</span>
-          </div>
-          <p className="text-sm text-gray-300 leading-relaxed italic line-clamp-3 group-hover/context:line-clamp-none transition-all">"{flag.aiAnalysis}"</p>
-        </div>
-        
-        <div className="px-2">
-          <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-            Suggested Remediation
-          </div>
-          <ul className="space-y-2">
-            {flag.recommendedActions?.map((act, i) => (
-              <li key={i} className="flex items-start gap-3 text-xs text-gray-400">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-1.5 shrink-0" />
-                {act}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
+import React from 'react';import { AlertCircle, AlertOctagon, CheckCircle2, TrendingDown, Users, Calendar, Sparkles } from 'lucide-react';export default function CurriculumFlagCard({ flag = {} }) {  const isCritical = flag.flagSeverity === 'critical';  const isConcern = flag.flagSeverity === 'concern';  const statusColor = isCritical ? '#f43f5e' : isConcern ? '#f59e0b' : '#10b981';  const statusBg = isCritical ? 'rgba(244,63,94,0.1)' : isConcern ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)';  return (    <div className="relative group bg-white/5 border border-white/10 rounded-[2rem] p-8 backdrop-blur-3xl transition-all duration-500 hover:bg-white/10 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">      <div className={`absolute top-0 right-10 w-24 h-1 rounded-b-full shadow-[0_5px_15px_rgba(0,0,0,0.3)]`} style={{ background: statusColor }} />      <div className="flex justify-between items-start mb-8">        <div className="flex items-center gap-4">          <div className="p-3 rounded-2xl bg-white/5 border border-white/10 shadow-inner">            {isCritical ? <AlertOctagon size={28} className="text-rose-500 animate-pulse" /> : isConcern ? <AlertCircle size={28} className="text-amber-500" /> : <CheckCircle2 size={28} className="text-emerald-500" />}          </div>          <div>            <h3 className="text-2xl font-black text-white tracking-tight leading-none mb-2">{flag.subject}</h3>            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">{flag.department} DIV</div>          </div>        </div>        <div className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border" style={{ color: statusColor, borderColor: `${statusColor}44`, background: statusBg }}>          {flag.flagSeverity} SEVERITY        </div>      </div>      <div className="grid grid-cols-3 gap-4 mb-8">        {[          { icon: <TrendingDown size={14} />, label: 'Fail Rate', value: `${flag.avgFailureRate}%`, color: isCritical ? 'text-rose-500' : 'text-white' },          { icon: <Calendar size={14} />, label: 'Flag Count', value: flag.semestersFlagged, color: 'text-white' },          { icon: <Users size={14} />, label: 'Affected', value: `${flag.totalFailed}/${flag.totalStudents}`, color: 'text-white' },        ].map((stat, i) => (          <div key={i} className="bg-black/20 rounded-2xl p-4 border border-white/5 flex flex-col items-center text-center">            <div className="text-gray-500 mb-1">{stat.icon}</div>            <div className={`text-lg font-black ${stat.color}`}>{stat.value}</div>            <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{stat.label}</div>          </div>        ))}      </div>      <div className="space-y-4">        <div className="bg-white/5 rounded-2xl p-6 border border-white/5 relative overflow-hidden group/context">          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/50" />          <div className="flex items-center gap-2 mb-3">             <Sparkles size={14} className="text-indigo-400" />             <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">AI Synthesis</span>          </div>          <p className="text-sm text-gray-300 leading-relaxed italic line-clamp-3 group-hover/context:line-clamp-none transition-all">"{flag.aiAnalysis}"</p>        </div>        <div className="px-2">          <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">            Suggested Remediation          </div>          <ul className="space-y-2">            {flag.recommendedActions?.map((act, i) => (              <li key={i} className="flex items-start gap-3 text-xs text-gray-400">                <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-1.5 shrink-0" />                {act}              </li>            ))}          </ul>        </div>      </div>    </div>  );}

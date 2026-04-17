@@ -1,110 +1,1 @@
-'use client';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import api from '@/lib/axios';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { ChartSkel, TextSkel } from '@/components/ui/Skeleton';
-import { SafeTip, CW } from '@/lib/chart';
-import { formatDistanceToNow, format } from 'date-fns';
-
-const TYPE_META = {
-  risk_change:  { icon: '📉', color: '#f43f5e' },
-  alert:        { icon: '🔔', color: '#f59e0b' },
-  intervention: { icon: '🛡️', color: '#0ea5e9' },
-  improvement:  { icon: '✅', color: '#10b981' },
-};
-const SEV_COLORS = { danger: '#f43f5e', warning: '#f59e0b', info: '#0ea5e9', success: '#10b981' };
-
-export default function JourneyPage() {
-  const { data: longitudinal, isLoading: longLoading } = useQuery({
-    queryKey: ['student-longitudinal'],
-    queryFn: () => api.get('/student/longitudinal').then(r => r.data),
-  });
-
-  const { data: timeline, isLoading: tlLoading } = useQuery({
-    queryKey: ['student-timeline'],
-    queryFn: () => api.get('/student/timeline').then(r => r.data),
-  });
-
-  const semesters = longitudinal?.semesters || longitudinal?.trend || [];
-  const events = timeline?.events || [];
-
-  // Detect repeat failures
-  const hasRepeat = events.filter(e => e.severity === 'danger').length >= 2;
-
-  return (
-    <div className="dashboard-content">
-      <PageHeader title="Academic Journey" subtitle="Your semester-by-semester progress and key events" />
-
-      {/* Longitudinal chart */}
-      {longLoading ? <ChartSkel height={280} /> : semesters.length > 1 ? (
-        <CW title="📈 Semester-wise Progress" height={280}>
-          <ResponsiveContainer>
-            <ComposedChart data={semesters}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
-              <XAxis dataKey="semester" tick={{ fill: '#64748b', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip content={<SafeTip />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="dropoutScore" name="Risk Score" fill="rgba(239,68,68,0.08)" stroke="#EF4444" strokeWidth={1.5} />
-              <Line type="monotone" dataKey="cgpa" name="CGPA" stroke="#7c3aed" strokeWidth={2} dot={{ fill: '#7c3aed', r: 3 }} />
-              <Line type="monotone" dataKey="attendance" name="Attendance %" stroke="#059669" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </CW>
-      ) : (
-        <div className="chart-container" style={{ textAlign: 'center', padding: 40 }}>
-          <p style={{ fontFamily: 'monospace', fontSize: 11, color: '#4E4E62' }}>Journey begins after your second semester upload</p>
-        </div>
-      )}
-
-      {/* Repeat failure alert */}
-      {hasRepeat && (
-        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, padding: '14px 18px', marginTop: 20 }}>
-          <p style={{ fontWeight: 600, color: '#f59e0b', marginBottom: 4 }}>⚠ Recurring struggle detected</p>
-          <p style={{ fontSize: 13, color: '#94a3b8' }}>You have had low scores or high risk across multiple semesters. Please speak with your faculty advisor.</p>
-        </div>
-      )}
-
-      {/* Timeline */}
-      <div className="chart-container" style={{ marginTop: 24 }}>
-        <div className="chart-title">⏳ Academic Timeline</div>
-        {tlLoading ? <TextSkel lines={6} /> : events.length === 0 ? (
-          <div className="empty-state">
-            <motion.svg width={48} height={48} viewBox="0 0 48 48">
-              <circle cx="24" cy="24" r="22" fill="rgba(16,185,129,0.08)" stroke="#10b981" strokeWidth="1.5" />
-              <motion.path d="M15 24 L21 30 L33 18" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"
-                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.6 }} />
-            </motion.svg>
-            <p style={{ fontWeight: 600, fontSize: 15, color: '#f1f5f9' }}>No risk events — you're on track</p>
-            <p style={{ fontSize: 13, color: '#64748b' }}>Events appear when your attendance or marks cross thresholds.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {events.map((ev, i) => {
-            const sevColor = SEV_COLORS[ev.severity] || '#64748b';
-              const meta = { icon: ev.severity === 'danger' ? '📉' : ev.severity === 'success' ? '✅' : ev.severity === 'warning' ? '🔔' : 'ℹ️', color: sevColor };
-              return (
-                <div key={i} style={{ display: 'flex', gap: 16, padding: '14px 0', borderBottom: i < events.length-1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: `${sevColor}15`, border: `1px solid ${sevColor}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                    {meta.icon}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
-                      <p style={{ fontWeight: 500, fontSize: 14, color: '#f1f5f9' }}>{ev.title || ev.event}</p>
-                      <span title={ev.date ? format(new Date(ev.date), 'dd MMM yyyy') : ''} style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace', whiteSpace: 'nowrap', marginLeft: 8 }}>
-                        {ev.date ? formatDistanceToNow(new Date(ev.date), { addSuffix: true }) : ''}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ev.description || ev.event}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+'use client';import { useQuery } from '@tanstack/react-query';import { motion } from 'framer-motion';import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import { ChartSkel, TextSkel } from '@/components/ui/Skeleton';import { SafeTip, CW } from '@/lib/chart';import { formatDistanceToNow, format } from 'date-fns';const TYPE_META = {  risk_change:  { icon: '📉', color: '#f43f5e' },  alert:        { icon: '🔔', color: '#f59e0b' },  intervention: { icon: '🛡️', color: '#0ea5e9' },  improvement:  { icon: '✅', color: '#10b981' },};const SEV_COLORS = { danger: '#f43f5e', warning: '#f59e0b', info: '#0ea5e9', success: '#10b981' };export default function JourneyPage() {  const { data: longitudinal, isLoading: longLoading } = useQuery({    queryKey: ['student-longitudinal'],    queryFn: () => api.get('/student/longitudinal').then(r => r.data),  });  const { data: timeline, isLoading: tlLoading } = useQuery({    queryKey: ['student-timeline'],    queryFn: () => api.get('/student/timeline').then(r => r.data),  });  const semesters = longitudinal?.semesters || longitudinal?.trend || [];  const events = timeline?.events || [];  const hasRepeat = events.filter(e => e.severity === 'danger').length >= 2;  return (    <div className="dashboard-content">      <PageHeader title="Academic Journey" subtitle="Your semester-by-semester progress and key events" />      {}      {longLoading ? <ChartSkel height={280} /> : semesters.length > 1 ? (        <CW title="📈 Semester-wise Progress" height={280}>          <ResponsiveContainer>            <ComposedChart data={semesters}>              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />              <XAxis dataKey="semester" tick={{ fill: '#64748b', fontSize: 11 }} />              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />              <Tooltip content={<SafeTip />} />              <Legend wrapperStyle={{ fontSize: 11 }} />              <Area type="monotone" dataKey="dropoutScore" name="Risk Score" fill="rgba(239,68,68,0.08)" stroke="#EF4444" strokeWidth={1.5} />              <Line type="monotone" dataKey="cgpa" name="CGPA" stroke="#7c3aed" strokeWidth={2} dot={{ fill: '#7c3aed', r: 3 }} />              <Line type="monotone" dataKey="attendance" name="Attendance %" stroke="#059669" strokeWidth={2} dot={false} strokeDasharray="4 2" />            </ComposedChart>          </ResponsiveContainer>        </CW>      ) : (        <div className="chart-container" style={{ textAlign: 'center', padding: 40 }}>          <p style={{ fontFamily: 'monospace', fontSize: 11, color: '#4E4E62' }}>Journey begins after your second semester upload</p>        </div>      )}      {}      {hasRepeat && (        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, padding: '14px 18px', marginTop: 20 }}>          <p style={{ fontWeight: 600, color: '#f59e0b', marginBottom: 4 }}>⚠ Recurring struggle detected</p>          <p style={{ fontSize: 13, color: '#94a3b8' }}>You have had low scores or high risk across multiple semesters. Please speak with your faculty advisor.</p>        </div>      )}      {}      <div className="chart-container" style={{ marginTop: 24 }}>        <div className="chart-title">⏳ Academic Timeline</div>        {tlLoading ? <TextSkel lines={6} /> : events.length === 0 ? (          <div className="empty-state">            <motion.svg width={48} height={48} viewBox="0 0 48 48">              <circle cx="24" cy="24" r="22" fill="rgba(16,185,129,0.08)" stroke="#10b981" strokeWidth="1.5" />              <motion.path d="M15 24 L21 30 L33 18" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.6 }} />            </motion.svg>            <p style={{ fontWeight: 600, fontSize: 15, color: '#f1f5f9' }}>No risk events — you're on track</p>            <p style={{ fontSize: 13, color: '#64748b' }}>Events appear when your attendance or marks cross thresholds.</p>          </div>        ) : (          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>            {events.map((ev, i) => {            const sevColor = SEV_COLORS[ev.severity] || '#64748b';              const meta = { icon: ev.severity === 'danger' ? '📉' : ev.severity === 'success' ? '✅' : ev.severity === 'warning' ? '🔔' : 'ℹ️', color: sevColor };              return (                <div key={i} style={{ display: 'flex', gap: 16, padding: '14px 0', borderBottom: i < events.length-1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: `${sevColor}15`, border: `1px solid ${sevColor}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>                    {meta.icon}                  </div>                  <div style={{ flex: 1 }}>                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>                      <p style={{ fontWeight: 500, fontSize: 14, color: '#f1f5f9' }}>{ev.title || ev.event}</p>                      <span title={ev.date ? format(new Date(ev.date), 'dd MMM yyyy') : ''} style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace', whiteSpace: 'nowrap', marginLeft: 8 }}>                        {ev.date ? formatDistanceToNow(new Date(ev.date), { addSuffix: true }) : ''}                      </span>                    </div>                    <p style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ev.description || ev.event}</p>                  </div>                </div>              );            })}          </div>        )}      </div>    </div>  );}

@@ -1,112 +1,1 @@
-'use client';
-import { useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, MeshDistortMaterial, Float, Text3D, Center } from '@react-three/drei';
-import * as THREE from 'three';
-
-function RiskScoreOrb({ score, tier }) {
-  const ref = useRef();
-  
-  const colorMap = {
-    LOW: '#10b981',
-    MEDIUM: '#f59e0b',
-    HIGH: '#f43f5e',
-    CRITICAL: '#dc2626'
-  };
-  
-  const color = colorMap[tier] || '#10b981';
-  const intensity = score / 100;
-
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime();
-    ref.current.position.y = Math.sin(time * 0.5) * 0.1;
-    ref.current.rotation.y = time * 0.3;
-  });
-
-  return (
-    <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
-      <Sphere ref={ref} args={[1.2, 64, 64]}>
-        <MeshDistortMaterial
-          color={color}
-          attach="material"
-          distort={0.3 + intensity * 0.2}
-          speed={2}
-          roughness={0.2}
-          metalness={0.8}
-          emissive={color}
-          emissiveIntensity={0.4 + intensity * 0.3}
-        />
-      </Sphere>
-      
-      <mesh position={[0, 0, 1.3]}>
-        <planeGeometry args={[1.5, 0.6]} />
-        <meshBasicMaterial color="#0a0a1a" transparent opacity={0.8} />
-      </mesh>
-      
-      <Center position={[0, 0, 1.31]}>
-        <Text3D
-          font="/fonts/Space_Grotesk_Bold.json"
-          size={0.25}
-          height={0.05}
-        >
-          {Math.round(score)}
-          <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
-        </Text3D>
-      </Center>
-    </Float>
-  );
-}
-
-function ParticleField() {
-  const particlesRef = useRef();
-  const particleCount = 500;
-
-  const positions = new Float32Array(particleCount * 3);
-  for (let i = 0; i < particleCount; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 10;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
-  }
-
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime();
-    particlesRef.current.rotation.y = time * 0.05;
-  });
-
-  return (
-    <points ref={particlesRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleCount}
-          array={positions}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.02}
-        color="#6366f1"
-        transparent
-        opacity={0.6}
-        sizeAttenuation
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
-  );
-}
-
-export default function RiskVisualization3D({ score = 50, tier = 'MEDIUM' }) {
-  return (
-    <div style={{ width: '100%', height: 300, borderRadius: 16, overflow: 'hidden', background: 'rgba(0,0,0,0.2)' }}>
-      <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
-        <ambientLight intensity={0.3} />
-        <pointLight position={[10, 10, 10]} intensity={1} color="#6366f1" />
-        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#8b5cf6" />
-        <spotLight position={[0, 5, 0]} angle={0.3} penumbra={1} intensity={1} color="#ffffff" />
-        
-        <ParticleField />
-        <RiskScoreOrb score={score} tier={tier} />
-      </Canvas>
-    </div>
-  );
-}
+'use client';import { useRef } from 'react';import { Canvas, useFrame } from '@react-three/fiber';import { Sphere, MeshDistortMaterial, Float, Text3D, Center } from '@react-three/drei';import * as THREE from 'three';function RiskScoreOrb({ score, tier }) {  const ref = useRef();  const colorMap = {    LOW: '#10b981',    MEDIUM: '#f59e0b',    HIGH: '#f43f5e',    CRITICAL: '#dc2626'  };  const color = colorMap[tier] || '#10b981';  const intensity = score / 100;  useFrame((state) => {    const time = state.clock.getElapsedTime();    ref.current.position.y = Math.sin(time * 0.5) * 0.1;    ref.current.rotation.y = time * 0.3;  });  return (    <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>      <Sphere ref={ref} args={[1.2, 64, 64]}>        <MeshDistortMaterial          color={color}          attach="material"          distort={0.3 + intensity * 0.2}          speed={2}          roughness={0.2}          metalness={0.8}          emissive={color}          emissiveIntensity={0.4 + intensity * 0.3}        />      </Sphere>      <mesh position={[0, 0, 1.3]}>        <planeGeometry args={[1.5, 0.6]} />        <meshBasicMaterial color="#0a0a1a" transparent opacity={0.8} />      </mesh>      <Center position={[0, 0, 1.31]}>        <Text3D          font="/fonts/Space_Grotesk_Bold.json"          size={0.25}          height={0.05}        >          {Math.round(score)}          <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />        </Text3D>      </Center>    </Float>  );}function ParticleField() {  const particlesRef = useRef();  const particleCount = 500;  const positions = new Float32Array(particleCount * 3);  for (let i = 0; i < particleCount; i++) {    positions[i * 3] = (Math.random() - 0.5) * 10;    positions[i * 3 + 1] = (Math.random() - 0.5) * 10;    positions[i * 3 + 2] = (Math.random() - 0.5) * 10;  }  useFrame((state) => {    const time = state.clock.getElapsedTime();    particlesRef.current.rotation.y = time * 0.05;  });  return (    <points ref={particlesRef}>      <bufferGeometry>        <bufferAttribute          attach="attributes-position"          count={particleCount}          array={positions}          itemSize={3}        />      </bufferGeometry>      <pointsMaterial        size={0.02}        color="#6366f1"        transparent        opacity={0.6}        sizeAttenuation        blending={THREE.AdditiveBlending}      />    </points>  );}export default function RiskVisualization3D({ score = 50, tier = 'MEDIUM' }) {  return (    <div style={{ width: '100%', height: 300, borderRadius: 16, overflow: 'hidden', background: 'rgba(0,0,0,0.2)' }}>      <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>        <ambientLight intensity={0.3} />        <pointLight position={[10, 10, 10]} intensity={1} color="#6366f1" />        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#8b5cf6" />        <spotLight position={[0, 5, 0]} angle={0.3} penumbra={1} intensity={1} color="#ffffff" />        <ParticleField />        <RiskScoreOrb score={score} tier={tier} />      </Canvas>    </div>  );}

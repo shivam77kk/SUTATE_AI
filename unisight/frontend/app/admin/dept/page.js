@@ -1,230 +1,1 @@
-'use client';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import api from '@/lib/axios';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell
-} from 'recharts';
-import { Building2, TrendingDown, ShieldAlert, GraduationCap, ArrowRight, LayoutGrid } from 'lucide-react';
-
-const DEPTS = ['CSE', 'IT', 'Mech', 'Civil'];
-const DEPT_COLORS = { CSE: '#6366f1', IT: '#10b981', Mech: '#f59e0b', Civil: '#0ea5e9' };
-
-export default function AdminDeptDrilldown() {
-  const [selectedDept, setSelectedDept] = useState('CSE');
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-dept', selectedDept],
-    queryFn: () => api.get(`/admin/dept/${selectedDept}`).then(r => r.data),
-    enabled: !!selectedDept,
-  });
-
-  const color = DEPT_COLORS[selectedDept] || '#6366f1';
-  const subjectStats = data?.subjectStats || [];
-  const riskDist = data?.riskDistribution || {};
-
-  return (
-    <div className="dashboard-content animate-fadeIn p-6">
-      {/* Header with improved controls */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-12">
-        <div className="flex-1">
-          <h1 className="page-title flex items-center gap-4 text-4xl mb-2">
-            <Building2 size={36} className="text-amber-500 shrink-0" />
-            <span className="font-black tracking-tight tracking-[-0.03em]">Department <span className="gradient-text-amber">Analytics</span></span>
-          </h1>
-          <p className="page-subtitle text-lg opacity-60">Real-time subject proficiency and engagement heatmap</p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2 bg-white/5 p-2 rounded-[1.5rem] border border-white/10 backdrop-blur-2xl shadow-2xl">
-          {DEPTS.map(d => (
-            <button 
-              key={d} 
-              onClick={() => setSelectedDept(d)}
-              className={`px-6 py-3 rounded-xl font-black text-xs tracking-widest transition-all duration-300 flex items-center gap-2 whitespace-nowrap ${
-                selectedDept === d 
-                  ? 'bg-amber-500 text-white shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] scale-105' 
-                  : 'text-gray-500 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {selectedDept === d && <LayoutGrid size={14} />}
-              {d.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Hero Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
-        {[
-          { label: 'Enrolled', value: data?.totalStudents ?? '—', icon: <Building2 size={18} className="text-indigo-400" />, c: color },
-          { label: 'Subject Avg', value: `${data?.avgDeptScore ?? '—'}%`, icon: <GraduationCap size={18} className="text-emerald-400" />, c: '#10b981' },
-          { label: 'High Risk', value: riskDist.HIGH ?? '—', icon: <ShieldAlert size={18} className="text-rose-400" />, c: '#f43f5e' },
-          { label: 'Worst Perf', value: data?.worstSubject || '—', icon: <TrendingDown size={18} className="text-amber-400" />, c: '#f59e0b' },
-        ].map(({ label, value, icon, c }) => (
-          <div key={label} className="relative group overflow-hidden bg-white/5 border border-white/10 rounded-[2.5rem] p-8 transition-all hover:bg-white/10 hover:-translate-y-1 shadow-xl">
-            <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/5 rounded-full blur-[40px] group-hover:bg-white/10 transition-colors" />
-            <div className="flex items-center gap-3 mb-4 text-gray-500 border-b border-white/5 pb-4">
-               {icon}
-               <span className="text-[10px] font-black uppercase tracking-[0.25em]">{label}</span>
-            </div>
-            <div className="text-3xl font-black transition-all font-sans" style={{ color: c }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-80 bg-white/5 border border-white/10 rounded-[2.5rem] animate-pulse relative overflow-hidden">
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
-          {/* Main Performance Chart */}
-          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl relative">
-            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3">
-               <div className="w-1.5 h-6 rounded-full" style={{ background: color }} />
-               Batch Proficiency Matrix
-            </h3>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={subjectStats}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                  <XAxis 
-                    dataKey="subject" 
-                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    axisLine={false} 
-                    tickLine={false}
-                    interval={0}
-                    height={60}
-                    angle={-15}
-                    textAnchor="end"
-                  />
-                  <YAxis 
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} 
-                    domain={[0, 100]} 
-                    axisLine={false} 
-                    tickLine={false} 
-                  />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    contentStyle={{ 
-                      background: '#0a0a1a', 
-                      border: '1px solid rgba(255,255,255,0.1)', 
-                      borderRadius: '20px', 
-                      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-                      padding: '12px 16px'
-                    }} 
-                  />
-                  <Bar dataKey="passPercent" radius={[8, 8, 0, 0]} name="Pass %">
-                    {subjectStats.map((_, i) => <Cell key={i} fill={color} fillOpacity={0.85} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Core Competencies Radar */}
-          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl">
-             <h3 className="text-xl font-black text-white mb-8">Subject Strength Radar</h3>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={subjectStats}>
-                  <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 800 }} />
-                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar 
-                    name="Avg Score" 
-                    dataKey="avgScore" 
-                    stroke={color} 
-                    fill={color} 
-                    fillOpacity={0.25} 
-                    strokeWidth={4} 
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Attendance Heatmap */}
-          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-xl font-black text-white">Engagement Heatmap</h3>
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-1 bg-white/5 rounded-full">Attendance %</div>
-            </div>
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={subjectStats} layout="vertical" margin={{ left: 40, right: 20 }}>
-                  <XAxis type="number" domain={[0, 100]} hide />
-                  <YAxis 
-                    dataKey="subject" 
-                    type="category" 
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 800 }} 
-                    axisLine={false} 
-                    tickLine={false}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    contentStyle={{ background: '#0a0a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '15px' }} 
-                  />
-                  <Bar dataKey="avgAttendance" radius={[0, 12, 12, 0]} barSize={20}>
-                    {subjectStats.map((s, i) => (
-                      <Cell key={i} fill={s.avgAttendance < 75 ? '#f43f5e' : s.avgAttendance < 85 ? '#f59e0b' : '#10b981'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Advanced Risk Landscape */}
-          <div className="bg-gradient-to-br from-white/5 to-transparent border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl flex flex-col justify-between overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[80px]" />
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <ShieldAlert size={20} className="text-rose-500" />
-                <h3 className="text-xl font-black text-white">Intervention Priority</h3>
-              </div>
-              <p className="text-sm text-gray-500 mb-10">Actionable risk distribution for {selectedDept}</p>
-              
-              <div className="space-y-8">
-                {[
-                  { level: 'Critical Support Required', count: riskDist.HIGH || 0, color: '#f43f5e', icon: '🔴' },
-                  { level: 'Proactive Monitoring', count: riskDist.MEDIUM || 0, color: '#f59e0b', icon: '🟡' },
-                  { level: 'Stable Performance', count: riskDist.LOW || 0, color: '#10b981', icon: '🟢' },
-                ].map(({ level, count, color: c, icon }) => {
-                  const total = (riskDist.HIGH||0)+(riskDist.MEDIUM||0)+(riskDist.LOW||0) || 1;
-                  const pct = Math.round(count / total * 100);
-                  return (
-                    <div key={level} className="relative">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
-                          {level}
-                        </span>
-                        <span className="text-sm font-black text-white bg-white/5 px-3 py-1 rounded-lg">{count}</span>
-                      </div>
-                      <div className="h-4 bg-white/5 rounded-full overflow-hidden p-1 border border-white/10 shadow-inner">
-                        <div className="h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(255,255,255,0.05)]" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${c}88, ${c})` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-12 flex justify-between items-center bg-white/5 -mx-10 -mb-10 p-6 px-10 border-t border-white/10">
-               <div className="text-[11px] text-gray-400 font-bold tracking-tight">AI-optimized prioritization engine</div>
-               <button className="flex items-center gap-2 text-[11px] font-black text-amber-500 hover:text-amber-400 tracking-widest transition-colors">
-                  GENERATE AGENT BRIEFING <ArrowRight size={14} />
-               </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+'use client';import { useState } from 'react';import { useQuery } from '@tanstack/react-query';import api from '@/lib/axios';import {  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,  ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell} from 'recharts';import { Building2, TrendingDown, ShieldAlert, GraduationCap, ArrowRight, LayoutGrid } from 'lucide-react';const DEPTS = ['CSE', 'IT', 'Mech', 'Civil'];const DEPT_COLORS = { CSE: '#6366f1', IT: '#10b981', Mech: '#f59e0b', Civil: '#0ea5e9' };export default function AdminDeptDrilldown() {  const [selectedDept, setSelectedDept] = useState('CSE');  const { data, isLoading } = useQuery({    queryKey: ['admin-dept', selectedDept],    queryFn: () => api.get(`/admin/dept/${selectedDept}`).then(r => r.data),    enabled: !!selectedDept,  });  const color = DEPT_COLORS[selectedDept] || '#6366f1';  const subjectStats = data?.subjectStats || [];  const riskDist = data?.riskDistribution || {};  return (    <div className="dashboard-content animate-fadeIn p-6">      {}      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-12">        <div className="flex-1">          <h1 className="page-title flex items-center gap-4 text-4xl mb-2">            <Building2 size={36} className="text-amber-500 shrink-0" />            <span className="font-black tracking-tight tracking-[-0.03em]">Department <span className="gradient-text-amber">Analytics</span></span>          </h1>          <p className="page-subtitle text-lg opacity-60">Real-time subject proficiency and engagement heatmap</p>        </div>        <div className="flex flex-wrap items-center gap-2 bg-white/5 p-2 rounded-[1.5rem] border border-white/10 backdrop-blur-2xl shadow-2xl">          {DEPTS.map(d => (            <button               key={d}               onClick={() => setSelectedDept(d)}              className={`px-6 py-3 rounded-xl font-black text-xs tracking-widest transition-all duration-300 flex items-center gap-2 whitespace-nowrap ${                selectedDept === d                   ? 'bg-amber-500 text-white shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] scale-105'                   : 'text-gray-500 hover:text-white hover:bg-white/5'              }`}            >              {selectedDept === d && <LayoutGrid size={14} />}              {d.toUpperCase()}            </button>          ))}        </div>      </div>      {}      <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">        {[          { label: 'Enrolled', value: data?.totalStudents ?? '—', icon: <Building2 size={18} className="text-indigo-400" />, c: color },          { label: 'Subject Avg', value: `${data?.avgDeptScore ?? '—'}%`, icon: <GraduationCap size={18} className="text-emerald-400" />, c: '#10b981' },          { label: 'High Risk', value: riskDist.HIGH ?? '—', icon: <ShieldAlert size={18} className="text-rose-400" />, c: '#f43f5e' },          { label: 'Worst Perf', value: data?.worstSubject || '—', icon: <TrendingDown size={18} className="text-amber-400" />, c: '#f59e0b' },        ].map(({ label, value, icon, c }) => (          <div key={label} className="relative group overflow-hidden bg-white/5 border border-white/10 rounded-[2.5rem] p-8 transition-all hover:bg-white/10 hover:-translate-y-1 shadow-xl">            <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/5 rounded-full blur-[40px] group-hover:bg-white/10 transition-colors" />            <div className="flex items-center gap-3 mb-4 text-gray-500 border-b border-white/5 pb-4">               {icon}               <span className="text-[10px] font-black uppercase tracking-[0.25em]">{label}</span>            </div>            <div className="text-3xl font-black transition-all font-sans" style={{ color: c }}>{value}</div>          </div>        ))}      </div>      {isLoading ? (        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">          {[1, 2, 3, 4].map(i => (            <div key={i} className="h-80 bg-white/5 border border-white/10 rounded-[2.5rem] animate-pulse relative overflow-hidden">               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />            </div>          ))}        </div>      ) : (        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">          {}          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl relative">            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3">               <div className="w-1.5 h-6 rounded-full" style={{ background: color }} />               Batch Proficiency Matrix            </h3>            <div className="h-[320px]">              <ResponsiveContainer width="100%" height="100%">                <BarChart data={subjectStats}>                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />                  <XAxis                     dataKey="subject"                     tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}                     axisLine={false}                     tickLine={false}                    interval={0}                    height={60}                    angle={-15}                    textAnchor="end"                  />                  <YAxis                     tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }}                     domain={[0, 100]}                     axisLine={false}                     tickLine={false}                   />                  <Tooltip                     cursor={{ fill: 'rgba(255,255,255,0.02)' }}                    contentStyle={{                       background: '#0a0a1a',                       border: '1px solid rgba(255,255,255,0.1)',                       borderRadius: '20px',                       boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',                      padding: '12px 16px'                    }}                   />                  <Bar dataKey="passPercent" radius={[8, 8, 0, 0]} name="Pass %">                    {subjectStats.map((_, i) => <Cell key={i} fill={color} fillOpacity={0.85} />)}                  </Bar>                </BarChart>              </ResponsiveContainer>            </div>          </div>          {}          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl">             <h3 className="text-xl font-black text-white mb-8">Subject Strength Radar</h3>            <div className="h-[320px]">              <ResponsiveContainer width="100%" height="100%">                <RadarChart data={subjectStats}>                  <PolarGrid stroke="rgba(255,255,255,0.1)" />                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 800 }} />                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />                  <Radar                     name="Avg Score"                     dataKey="avgScore"                     stroke={color}                     fill={color}                     fillOpacity={0.25}                     strokeWidth={4}                   />                </RadarChart>              </ResponsiveContainer>            </div>          </div>          {}          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl">            <div className="flex justify-between items-center mb-10">              <h3 className="text-xl font-black text-white">Engagement Heatmap</h3>              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-1 bg-white/5 rounded-full">Attendance %</div>            </div>            <div className="h-[280px]">              <ResponsiveContainer width="100%" height="100%">                <BarChart data={subjectStats} layout="vertical" margin={{ left: 40, right: 20 }}>                  <XAxis type="number" domain={[0, 100]} hide />                  <YAxis                     dataKey="subject"                     type="category"                     tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 800 }}                     axisLine={false}                     tickLine={false}                  />                  <Tooltip                     cursor={{ fill: 'rgba(255,255,255,0.02)' }}                    contentStyle={{ background: '#0a0a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '15px' }}                   />                  <Bar dataKey="avgAttendance" radius={[0, 12, 12, 0]} barSize={20}>                    {subjectStats.map((s, i) => (                      <Cell key={i} fill={s.avgAttendance < 75 ? '#f43f5e' : s.avgAttendance < 85 ? '#f59e0b' : '#10b981'} />                    ))}                  </Bar>                </BarChart>              </ResponsiveContainer>            </div>          </div>          {}          <div className="bg-gradient-to-br from-white/5 to-transparent border border-white/10 rounded-[2.5rem] p-10 backdrop-blur-3xl flex flex-col justify-between overflow-hidden relative">            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[80px]" />            <div>              <div className="flex items-center gap-3 mb-2">                <ShieldAlert size={20} className="text-rose-500" />                <h3 className="text-xl font-black text-white">Intervention Priority</h3>              </div>              <p className="text-sm text-gray-500 mb-10">Actionable risk distribution for {selectedDept}</p>              <div className="space-y-8">                {[                  { level: 'Critical Support Required', count: riskDist.HIGH || 0, color: '#f43f5e', icon: '🔴' },                  { level: 'Proactive Monitoring', count: riskDist.MEDIUM || 0, color: '#f59e0b', icon: '🟡' },                  { level: 'Stable Performance', count: riskDist.LOW || 0, color: '#10b981', icon: '🟢' },                ].map(({ level, count, color: c, icon }) => {                  const total = (riskDist.HIGH||0)+(riskDist.MEDIUM||0)+(riskDist.LOW||0) || 1;                  const pct = Math.round(count / total * 100);                  return (                    <div key={level} className="relative">                      <div className="flex justify-between items-center mb-3">                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />                          {level}                        </span>                        <span className="text-sm font-black text-white bg-white/5 px-3 py-1 rounded-lg">{count}</span>                      </div>                      <div className="h-4 bg-white/5 rounded-full overflow-hidden p-1 border border-white/10 shadow-inner">                        <div className="h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(255,255,255,0.05)]" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${c}88, ${c})` }} />                      </div>                    </div>                  );                })}              </div>            </div>            <div className="mt-12 flex justify-between items-center bg-white/5 -mx-10 -mb-10 p-6 px-10 border-t border-white/10">               <div className="text-[11px] text-gray-400 font-bold tracking-tight">AI-optimized prioritization engine</div>               <button className="flex items-center gap-2 text-[11px] font-black text-amber-500 hover:text-amber-400 tracking-widest transition-colors">                  GENERATE AGENT BRIEFING <ArrowRight size={14} />               </button>            </div>          </div>        </div>      )}    </div>  );}

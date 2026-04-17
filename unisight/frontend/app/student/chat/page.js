@@ -1,268 +1,1 @@
-'use client';
-import { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
-import api from '@/lib/axios';
-import useAuthStore from '@/store/authStore';
-import { CardSkel } from '@/components/ui/Skeleton';
-import VoicePlayer from '@/components/shared/VoicePlayer';
-import toast from 'react-hot-toast';
-import { Mic, MicOff } from 'lucide-react';
-
-const CHIPS = [
-  "Will I pass OS this semester?",
-  "Which subject should I focus on first?",
-  "How to improve my CGPA to 8.0?",
-  "What are my weak areas?",
-];
-
-function TypingDots() {
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '12px 16px' }}>
-      {[0,1,2].map(i => (
-        <motion.div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1' }}
-          animate={{ scale: [1, 1.4, 1], opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.2 }} />
-      ))}
-    </div>
-  );
-}
-
-export default function ChatPage() {
-  const { user } = useAuthStore();
-  const [messages, setMessages] = useState([
-    { id: 0, role: 'model', content: `Hi ${user?.name?.split(' ')[0] || 'there'}! 👋 I'm your SUTATE AI advisor. Ask me anything about your academics, marks, or study plan.`, timestamp: new Date() }
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState('text');
-  const [isRecording, setIsRecording] = useState(false);
-  const bottomRef = useRef(null);
-  const recognitionRef = useRef(null);
-
-  const { data: dashboard } = useQuery({
-    queryKey: ['student-dashboard'],
-    queryFn: () => api.get('/student/dashboard').then(r => r.data),
-  });
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
-
-  // Initialize speech recognition
-  useEffect(() => {
-    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onerror = () => {
-        setIsRecording(false);
-        toast.error('Voice recognition failed');
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-      };
-    }
-  }, []);
-
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      toast.error('Voice recognition not supported in this browser');
-      return;
-    }
-
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
-    }
-  };
-
-  const sendMessage = async (text) => {
-    const msg = text || input.trim();
-    if (!msg || loading) return;
-    setInput('');
-    const userMsg = { id: Date.now(), role: 'user', content: msg, timestamp: new Date() };
-    setMessages(prev => [...prev, userMsg]);
-    setLoading(true);
-    try {
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const { data } = await api.post('/student/chat', { 
-        message: msg, 
-        history,
-        voiceMode: mode === 'voice'
-      });
-      setMessages(prev => [...prev, { 
-        id: Date.now()+1, 
-        role: 'model', 
-        content: data.reply, 
-        audio: data.audio,
-        timestamp: new Date() 
-      }]);
-    } catch (err) {
-      console.error('Chat error:', err);
-      toast.error('AI advisor is unavailable. Try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  };
-
-  return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'transparent' }}>
-      {/* Context panel */}
-      <div style={{ width: 220, borderRight: '1px solid rgba(255,255,255,0.06)', padding: '24px 16px', flexShrink: 0, overflowY: 'auto', background: 'var(--bg-elevated)' }}>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 14 }}>Your snapshot</p>
-        {!dashboard ? <CardSkel height={160} /> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { label: 'CGPA', value: dashboard.cgpa?.toFixed(2), color: '#6366f1' },
-              { label: 'RISK', value: `${dashboard.dropoutProbability ?? '--'}%`, color: dashboard.dropoutTier === 'LOW' ? '#10b981' : '#f43f5e' },
-              { label: 'ATTEND.', value: `${dashboard.avgAttendance ?? '--'}%`, color: '#10b981' },
-              { label: 'RANK', value: dashboard.classRank ? `#${dashboard.classRank}` : '--', color: '#f59e0b' },
-            ].map(card => (
-              <div key={card.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>{card.label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: card.color, fontFamily: "'Space Grotesk', sans-serif" }}>{card.value}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ marginTop: 20 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 10 }}>Mode</p>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['text', 'voice'].map(m => (
-              <button key={m} onClick={() => setMode(m)} style={{
-                flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                background: mode === m ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${mode === m ? '#6366f1' : 'rgba(255,255,255,0.06)'}`,
-                color: mode === m ? '#818cf8' : '#64748b', cursor: 'pointer', minHeight: 36,
-                transition: 'all 0.2s',
-              }}>{m === 'text' ? '⌨️ Text' : '🎤 Voice'}</button>
-            ))}
-          </div>
-          {mode === 'voice' && (
-            <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(99,102,241,0.08)', borderRadius: 8, fontSize: 10, color: '#818cf8', lineHeight: 1.4 }}>
-              Voice mode: AI responses will include audio
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)' }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🤖</div>
-          <div>
-            <p style={{ fontWeight: 700, fontSize: 15, color: '#f1f5f9' }}>SUTATE AI Advisor</p>
-            <p style={{ fontSize: 11, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />Online</p>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <AnimatePresence initial={false}>
-            {messages.map(msg => (
-              <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{ maxWidth: '70%' }}>
-                  <div style={{
-                    padding: '12px 16px', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                    background: msg.role === 'user' ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.05)',
-                    border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                    fontSize: 14, color: '#f1f5f9', lineHeight: 1.6,
-                  }}>
-                    {msg.content}
-                    <div style={{ fontSize: 10, color: msg.role === 'user' ? 'rgba(255,255,255,0.5)' : '#64748b', marginTop: 4, fontFamily: 'monospace' }}>
-                      {msg.timestamp?.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                  {msg.audio && msg.role === 'model' && (
-                    <VoicePlayer audioData={msg.audio} text={msg.content} />
-                  )}
-                </div>
-              </motion.div>
-            ))}
-            {loading && (
-              <motion.div key="typing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px 18px 18px 4px' }}>
-                  <TypingDots />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Suggestion chips (text mode) */}
-        {mode === 'text' && messages.length <= 1 && (
-          <div style={{ padding: '0 24px 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {CHIPS.map(chip => (
-              <button key={chip} onClick={() => sendMessage(chip)} style={{
-                padding: '6px 12px', borderRadius: 999, fontSize: 12, fontWeight: 500,
-                background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
-                color: '#818cf8', cursor: 'pointer', transition: 'all 0.2s', minHeight: 36,
-              }}
-                onMouseOver={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
-                onMouseOut={e => e.currentTarget.style.background = 'rgba(99,102,241,0.08)'}
-              >{chip}</button>
-            ))}
-          </div>
-        )}
-
-        {/* Input bar */}
-        <div style={{ padding: '12px 24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 10, background: 'var(--bg-elevated)' }}>
-          {mode === 'voice' && (
-            <button
-              onClick={toggleRecording}
-              disabled={loading}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                background: isRecording ? 'linear-gradient(135deg,#f43f5e,#dc2626)' : 'rgba(99,102,241,0.12)',
-                border: `1px solid ${isRecording ? '#f43f5e' : 'rgba(99,102,241,0.3)'}`,
-                color: 'white',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'all 0.2s',
-              }}
-            >
-              {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
-            </button>
-          )}
-          <textarea
-            value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
-            placeholder={mode === 'voice' ? 'Click mic to speak or type here...' : 'Ask anything about your academics...'}
-            disabled={loading}
-            className="input-field"
-            style={{ flex: 1, resize: 'none', height: 44, lineHeight: '22px', paddingTop: 11 }}
-          />
-          <button onClick={() => sendMessage()} disabled={loading || !input.trim()} style={{
-            width: 44, height: 44, borderRadius: 10, background: input.trim() && !loading ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.06)', color: 'white', fontSize: 18, cursor: input.trim() ? 'pointer' : 'default',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s',
-          }}>→</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+'use client';import { useState, useRef, useEffect } from 'react';import { useQuery } from '@tanstack/react-query';import { motion, AnimatePresence } from 'framer-motion';import api from '@/lib/axios';import useAuthStore from '@/store/authStore';import { CardSkel } from '@/components/ui/Skeleton';import VoicePlayer from '@/components/shared/VoicePlayer';import toast from 'react-hot-toast';import { Mic, MicOff } from 'lucide-react';const CHIPS = [  "Will I pass OS this semester?",  "Which subject should I focus on first?",  "How to improve my CGPA to 8.0?",  "What are my weak areas?",];function TypingDots() {  return (    <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '12px 16px' }}>      {[0,1,2].map(i => (        <motion.div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1' }}          animate={{ scale: [1, 1.4, 1], opacity: [0.4, 1, 0.4] }}          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.2 }} />      ))}    </div>  );}export default function ChatPage() {  const { user } = useAuthStore();  const [messages, setMessages] = useState([    { id: 0, role: 'model', content: `Hi ${user?.name?.split(' ')[0] || 'there'}! 👋 I'm your SUTATE AI advisor. Ask me anything about your academics, marks, or study plan.`, timestamp: new Date() }  ]);  const [input, setInput] = useState('');  const [loading, setLoading] = useState(false);  const [mode, setMode] = useState('text');  const [isRecording, setIsRecording] = useState(false);  const bottomRef = useRef(null);  const recognitionRef = useRef(null);  const { data: dashboard } = useQuery({    queryKey: ['student-dashboard'],    queryFn: () => api.get('/student/dashboard').then(r => r.data),  });  useEffect(() => {    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });  }, [messages, loading]);  useEffect(() => {    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;      recognitionRef.current = new SpeechRecognition();      recognitionRef.current.continuous = false;      recognitionRef.current.interimResults = false;      recognitionRef.current.lang = 'en-US';      recognitionRef.current.onresult = (event) => {        const transcript = event.results[0][0].transcript;        setInput(transcript);        setIsRecording(false);      };      recognitionRef.current.onerror = () => {        setIsRecording(false);        toast.error('Voice recognition failed');      };      recognitionRef.current.onend = () => {        setIsRecording(false);      };    }  }, []);  const toggleRecording = () => {    if (!recognitionRef.current) {      toast.error('Voice recognition not supported in this browser');      return;    }    if (isRecording) {      recognitionRef.current.stop();      setIsRecording(false);    } else {      recognitionRef.current.start();      setIsRecording(true);    }  };  const sendMessage = async (text) => {    const msg = text || input.trim();    if (!msg || loading) return;    setInput('');    const userMsg = { id: Date.now(), role: 'user', content: msg, timestamp: new Date() };    setMessages(prev => [...prev, userMsg]);    setLoading(true);    try {      const history = messages.map(m => ({ role: m.role, content: m.content }));      const { data } = await api.post('/student/chat', {         message: msg,         history,        voiceMode: mode === 'voice'      });      setMessages(prev => [...prev, {         id: Date.now()+1,         role: 'model',         content: data.reply,         audio: data.audio,        timestamp: new Date()       }]);    } catch (err) {      console.error('Chat error:', err);      toast.error('AI advisor is unavailable. Try again.');    } finally {      setLoading(false);    }  };  const handleKey = (e) => {    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }  };  return (    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'transparent' }}>      {}      <div style={{ width: 220, borderRight: '1px solid rgba(255,255,255,0.06)', padding: '24px 16px', flexShrink: 0, overflowY: 'auto', background: 'var(--bg-elevated)' }}>        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 14 }}>Your snapshot</p>        {!dashboard ? <CardSkel height={160} /> : (          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>            {[              { label: 'CGPA', value: dashboard.cgpa?.toFixed(2), color: '#6366f1' },              { label: 'RISK', value: `${dashboard.dropoutProbability ?? '--'}%`, color: dashboard.dropoutTier === 'LOW' ? '#10b981' : '#f43f5e' },              { label: 'ATTEND.', value: `${dashboard.avgAttendance ?? '--'}%`, color: '#10b981' },              { label: 'RANK', value: dashboard.classRank ? `#${dashboard.classRank}` : '--', color: '#f59e0b' },            ].map(card => (              <div key={card.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>{card.label}</div>                <div style={{ fontSize: 18, fontWeight: 700, color: card.color, fontFamily: "'Space Grotesk', sans-serif" }}>{card.value}</div>              </div>            ))}          </div>        )}        <div style={{ marginTop: 20 }}>          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', marginBottom: 10 }}>Mode</p>          <div style={{ display: 'flex', gap: 6 }}>            {['text', 'voice'].map(m => (              <button key={m} onClick={() => setMode(m)} style={{                flex: 1, padding: '7px 4px', borderRadius: 8, fontSize: 11, fontWeight: 600,                background: mode === m ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',                border: `1px solid ${mode === m ? '#6366f1' : 'rgba(255,255,255,0.06)'}`,                color: mode === m ? '#818cf8' : '#64748b', cursor: 'pointer', minHeight: 36,                transition: 'all 0.2s',              }}>{m === 'text' ? '⌨️ Text' : '🎤 Voice'}</button>            ))}          </div>          {mode === 'voice' && (            <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(99,102,241,0.08)', borderRadius: 8, fontSize: 10, color: '#818cf8', lineHeight: 1.4 }}>              Voice mode: AI responses will include audio            </div>          )}        </div>      </div>      {}      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)' }}>          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🤖</div>          <div>            <p style={{ fontWeight: 700, fontSize: 15, color: '#f1f5f9' }}>SUTATE AI Advisor</p>            <p style={{ fontSize: 11, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />Online</p>          </div>        </div>        {}        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>          <AnimatePresence initial={false}>            {messages.map(msg => (              <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}                style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>                <div style={{ maxWidth: '70%' }}>                  <div style={{                    padding: '12px 16px', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',                    background: msg.role === 'user' ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.05)',                    border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.06)',                    fontSize: 14, color: '#f1f5f9', lineHeight: 1.6,                  }}>                    {msg.content}                    <div style={{ fontSize: 10, color: msg.role === 'user' ? 'rgba(255,255,255,0.5)' : '#64748b', marginTop: 4, fontFamily: 'monospace' }}>                      {msg.timestamp?.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}                    </div>                  </div>                  {msg.audio && msg.role === 'model' && (                    <VoicePlayer audioData={msg.audio} text={msg.content} />                  )}                </div>              </motion.div>            ))}            {loading && (              <motion.div key="typing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', justifyContent: 'flex-start' }}>                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px 18px 18px 4px' }}>                  <TypingDots />                </div>              </motion.div>            )}          </AnimatePresence>          <div ref={bottomRef} />        </div>        {}        {mode === 'text' && messages.length <= 1 && (          <div style={{ padding: '0 24px 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>            {CHIPS.map(chip => (              <button key={chip} onClick={() => sendMessage(chip)} style={{                padding: '6px 12px', borderRadius: 999, fontSize: 12, fontWeight: 500,                background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',                color: '#818cf8', cursor: 'pointer', transition: 'all 0.2s', minHeight: 36,              }}                onMouseOver={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}                onMouseOut={e => e.currentTarget.style.background = 'rgba(99,102,241,0.08)'}              >{chip}</button>            ))}          </div>        )}        {}        <div style={{ padding: '12px 24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 10, background: 'var(--bg-elevated)' }}>          {mode === 'voice' && (            <button              onClick={toggleRecording}              disabled={loading}              style={{                width: 44,                height: 44,                borderRadius: 10,                background: isRecording ? 'linear-gradient(135deg,#f43f5e,#dc2626)' : 'rgba(99,102,241,0.12)',                border: `1px solid ${isRecording ? '#f43f5e' : 'rgba(99,102,241,0.3)'}`,                color: 'white',                cursor: 'pointer',                display: 'flex',                alignItems: 'center',                justifyContent: 'center',                flexShrink: 0,                transition: 'all 0.2s',              }}            >              {isRecording ? <MicOff size={20} /> : <Mic size={20} />}            </button>          )}          <textarea            value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}            placeholder={mode === 'voice' ? 'Click mic to speak or type here...' : 'Ask anything about your academics...'}            disabled={loading}            className="input-field"            style={{ flex: 1, resize: 'none', height: 44, lineHeight: '22px', paddingTop: 11 }}          />          <button onClick={() => sendMessage()} disabled={loading || !input.trim()} style={{            width: 44, height: 44, borderRadius: 10, background: input.trim() && !loading ? 'linear-gradient(135deg,#6366f1,#7c3aed)' : 'rgba(255,255,255,0.04)',            border: '1px solid rgba(255,255,255,0.06)', color: 'white', fontSize: 18, cursor: input.trim() ? 'pointer' : 'default',            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s',          }}>→</button>        </div>      </div>    </div>  );}

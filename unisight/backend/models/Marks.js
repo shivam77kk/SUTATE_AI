@@ -1,16 +1,1 @@
-import mongoose from 'mongoose';
-const marksSchema = new mongoose.Schema({
-  studentId:  { type: String, required: true },
-  classId:    { type: String, required: true },
-  subject:    { type: String, required: true },
-  department: { type: String, required: true },
-  semester:   { type: Number, required: true },
-  scores: {
-    ut1:    { type: Number, default: null },
-    midSem: { type: Number, default: null },
-    ut2:    { type: Number, default: null },
-    endSem: { type: Number, default: null },
-  },
-  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}, { timestamps: true });
-export default mongoose.model('Marks', marksSchema);
+import mongoose from 'mongoose';const marksSchema = new mongoose.Schema({  studentId:  { type: String, required: true },  classId:    { type: String, required: true },  subject:    { type: String, required: true },  department: { type: String, required: true },  semester:   { type: Number, required: true },  scores: {    ut1:    { type: Number, default: null },    midSem: { type: Number, default: null },    ut2:    { type: Number, default: null },    endSem: { type: Number, default: null },  },  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },}, { timestamps: true });export default mongoose.model('Marks', marksSchema);

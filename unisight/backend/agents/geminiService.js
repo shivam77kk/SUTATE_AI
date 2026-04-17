@@ -1,23 +1,18 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 dotenv.config();
-
 const genAI = new GoogleGenerativeAI(
   process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
 );
-
 const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
 let modelIndex = 0;
-
 function getModel(generationConfig = {}) {
   const name = MODELS[modelIndex % MODELS.length];
   return { model: genAI.getGenerativeModel({ model: name, generationConfig }), name };
 }
-
 function nextModel() {
   modelIndex = (modelIndex + 1) % MODELS.length;
 }
-
 function extractRetryDelay(err) {
   try {
     const details = err?.errorDetails || [];
@@ -32,14 +27,11 @@ function extractRetryDelay(err) {
   } catch {}
   return 0;
 }
-
 export async function callGemini(prompt, { maxTokens = 800, temperature = 0.3 } = {}) {
   const maxRetries = 4;
   let lastErr;
-
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const { model, name } = getModel({ maxOutputTokens: maxTokens, temperature });
-
     try {
       const result = await model.generateContent(prompt);
       const text = result?.response?.text?.() ?? '';
@@ -50,7 +42,6 @@ export async function callGemini(prompt, { maxTokens = 800, temperature = 0.3 } 
       lastErr = err;
       const status = err?.status || 0;
       console.warn(`[Gemini Agent] ${name} failed (${status || err.message?.substring(0, 80)})`);
-
       if (status === 429) {
         let delay = extractRetryDelay(err);
         if (delay <= 0) delay = Math.min(60000, 5000 * Math.pow(2, attempt));
@@ -59,14 +50,11 @@ export async function callGemini(prompt, { maxTokens = 800, temperature = 0.3 } 
         nextModel();
         continue;
       }
-
       nextModel();
     }
   }
-
   throw lastErr || new Error('All Gemini agent retries failed');
 }
-
 export async function callGeminiJSON(prompt) {
   const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1200 });
   const clean = text.replace(/```json|```/gi, '').trim();

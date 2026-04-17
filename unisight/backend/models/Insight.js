@@ -1,31 +1,1 @@
-import mongoose from 'mongoose';
-const insightSchema = new mongoose.Schema({
-  studentId:      { type: String, required: true },
-  classId:        { type: String, required: true },
-  department:     { type: String, required: true },
-  semester:       { type: Number },
-  cgpa:           { type: Number },
-  predictedScore: { min: Number, max: Number },
-  classRank:      { type: Number },
-  classPercentile:{ type: Number },
-  badges:         [{ id: Number, name: String, icon: String, color: String, desc: String }],
-  riskLevel:      { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
-  riskReason:     { type: String },
-  dropoutProbabilityScore: { type: Number, min: 0, max: 100, default: null },
-  dropoutTier:    { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], default: 'LOW' },
-  participationScore: { type: Number, default: null },
-  consecutiveAtRiskSemesters: { type: Number, default: 0 },
-  resources: [{
-    subject:  { type: String },
-    resource: { type: String },
-    type:     { type: String, enum: ['video', 'book', 'website', 'practice'] },
-  }],
-  recommendations: [{
-    title:        { type: String },
-    description:  { type: String },
-    priority:     { type: String, enum: ['HIGH', 'MEDIUM', 'LOW'] },
-  }],
-  generatedAt:    { type: Date, default: Date.now },
-  moodFlaggedForSupport: { type: Boolean, default: false },
-}, { timestamps: true });
-export default mongoose.model('Insight', insightSchema);
+import mongoose from 'mongoose';const insightSchema = new mongoose.Schema({  studentId:      { type: String, required: true },  classId:        { type: String, required: true },  department:     { type: String, required: true },  semester:       { type: Number },  cgpa:           { type: Number },  predictedScore: { min: Number, max: Number },  classRank:      { type: Number },  classPercentile:{ type: Number },  badges:         [{ id: Number, name: String, icon: String, color: String, desc: String }],  riskLevel:      { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },  riskReason:     { type: String },  dropoutProbabilityScore: { type: Number, min: 0, max: 100, default: null },  dropoutTier:    { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], default: 'LOW' },  participationScore: { type: Number, default: null },  consecutiveAtRiskSemesters: { type: Number, default: 0 },  resources: [{    subject:  { type: String },    resource: { type: String },    type:     { type: String, enum: ['video', 'book', 'website', 'practice'] },  }],  recommendations: [{    title:        { type: String },    description:  { type: String },    priority:     { type: String, enum: ['HIGH', 'MEDIUM', 'LOW'] },  }],  generatedAt:    { type: Date, default: Date.now },  moodFlaggedForSupport: { type: Boolean, default: false },}, { timestamps: true });export default mongoose.model('Insight', insightSchema);

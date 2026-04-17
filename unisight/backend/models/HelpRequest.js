@@ -1,18 +1,1 @@
-import mongoose from 'mongoose';
-
-const schema = new mongoose.Schema({
-  studentId: { type: String },
-  studentName: { type: String, required: true },
-  studentUserId: { type: String },
-  department: { type: String },
-  category: { type: String, required: true },
-  subject: { type: String, required: true },
-  description: { type: String, required: true },
-  urgency: { type: String, enum: ['urgent', 'general', 'today', 'this_week'], default: 'general' },
-  status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open' },
-  facultyResponse: { type: String },
-  respondedAt: { type: Date },
-  respondedBy: { type: String },
-}, { timestamps: true });
-
-export default mongoose.model('HelpRequest', schema);
+import mongoose from 'mongoose';const schema = new mongoose.Schema({  studentId: { type: String },  studentName: { type: String, required: true },  studentUserId: { type: String },  department: { type: String },  category: { type: String, required: true },  subject: { type: String, required: true },  description: { type: String, required: true },  urgency: { type: String, enum: ['urgent', 'general', 'today', 'this_week'], default: 'general' },  status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open' },  facultyResponse: { type: String },  respondedAt: { type: Date },  respondedBy: { type: String },}, { timestamps: true });export default mongoose.model('HelpRequest', schema);

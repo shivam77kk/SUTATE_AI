@@ -1,50 +1,1 @@
-import Notification from '../models/Notification.js';
-
-export const getNotifications = async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-
-    const [notifications, total, unreadCount] = await Promise.all([
-      Notification.find({ userId: req.user.userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Notification.countDocuments({ userId: req.user.userId }),
-      Notification.countDocuments({ userId: req.user.userId, isRead: false }),
-    ]);
-
-    res.json({
-      notifications,
-      unreadCount,
-      totalPages: Math.ceil(total / limit),
-      page,
-    });
-  } catch (err) {
-    console.error('[GetNotifications]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const markRead = async (req, res) => {
-  try {
-    await Notification.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user.userId },
-      { isRead: true }
-    );
-    res.json({ message: 'Marked as read' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const markAllRead = async (req, res) => {
-  try {
-    await Notification.updateMany({ userId: req.user.userId, isRead: false }, { isRead: true });
-    res.json({ message: 'All notifications marked as read' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
+import Notification from '../models/Notification.js';export const getNotifications = async (req, res) => {  try {    const page = parseInt(req.query.page) || 1;    const limit = parseInt(req.query.limit) || 20;    const skip = (page - 1) * limit;    const [notifications, total, unreadCount] = await Promise.all([      Notification.find({ userId: req.user.userId })        .sort({ createdAt: -1 })        .skip(skip)        .limit(limit)        .lean(),      Notification.countDocuments({ userId: req.user.userId }),      Notification.countDocuments({ userId: req.user.userId, isRead: false }),    ]);    res.json({      notifications,      unreadCount,      totalPages: Math.ceil(total / limit),      page,    });  } catch (err) {    console.error('[GetNotifications]', err);    res.status(500).json({ error: 'Server error' });  }};export const markRead = async (req, res) => {  try {    await Notification.findOneAndUpdate(      { _id: req.params.id, userId: req.user.userId },      { isRead: true }    );    res.json({ message: 'Marked as read' });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const markAllRead = async (req, res) => {  try {    await Notification.updateMany({ userId: req.user.userId, isRead: false }, { isRead: true });    res.json({ message: 'All notifications marked as read' });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};

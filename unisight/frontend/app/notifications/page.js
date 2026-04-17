@@ -1,104 +1,1 @@
-'use client';
-import { useState, useEffect } from 'react';
-import api from '@/lib/axios';
-import toast from 'react-hot-toast';
-import { formatDistanceToNow } from 'date-fns';
-import { useRouter } from 'next/navigation';
-
-export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
-  useEffect(() => { loadNotifications(); }, []);
-
-  const loadNotifications = async () => {
-    try {
-      const { data } = await api.get('/notifications?limit=50');
-      setNotifications(data.notifications);
-    } catch (err) {
-      toast.error('Failed to load notifications');
-    } finally { setLoading(false); }
-  };
-
-  const markRead = async (id) => {
-    try {
-      await api.patch(`/notifications/${id}/read`);
-      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
-    } catch { toast.error('Failed to mark read'); }
-  };
-
-  const markAllRead = async () => {
-    try {
-      await api.patch('/notifications/read-all');
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      toast.success('All marked as read');
-    } catch { toast.error('Failed to mark all read'); }
-  };
-
-  const getIcon = (type) => {
-    switch(type) {
-      case 'marks_uploaded': return '📈';
-      case 'risk_changed': return '⚠️';
-      case 'alert_received': return '📩';
-      case 'goal_progress': return '🎯';
-      case 'system': return '⚙️';
-      default: return '🔔';
-    }
-  };
-
-  return (
-    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <button onClick={() => router.back()} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '13px', marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            ← Back
-          </button>
-          <h1 style={{ fontSize: '28px', fontFamily: "'Space Grotesk', sans-serif" }}>Notifications</h1>
-        </div>
-        <button onClick={markAllRead} className="btn-secondary" style={{ fontSize: '13px' }}>
-          ✓ Mark All Read
-        </button>
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading notifications...</div>
-      ) : notifications.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: '40px', marginBottom: '16px' }}>📭</div>
-          <h3 style={{ fontSize: '18px', color: 'var(--text-main)', marginBottom: '8px' }}>All caught up!</h3>
-          <p style={{ color: 'var(--text-muted)' }}>You have no notifications right now.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {notifications.map(n => (
-            <div key={n._id} 
-              onClick={() => !n.isRead && markRead(n._id)}
-              style={{
-                display: 'flex', gap: '16px', padding: '16px',
-                background: n.isRead ? 'var(--bg-card)' : 'rgba(99, 102, 241, 0.05)',
-                border: `1px solid ${n.isRead ? 'var(--border)' : 'var(--primary)'}`,
-                borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
-                opacity: n.isRead ? 0.7 : 1
-              }}
-            >
-              <div style={{ fontSize: '24px', display: 'flex', alignItems: 'center' }}>
-                {getIcon(n.type)}
-              </div>
-              <div style={{ flex: 1 }}>
-                <h4 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>{n.title}</h4>
-                <p style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{n.message}</p>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
-                  {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-                </div>
-              </div>
-              {!n.isRead && (
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', alignSelf: 'center' }} />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+'use client';import { useState, useEffect } from 'react';import api from '@/lib/axios';import toast from 'react-hot-toast';import { formatDistanceToNow } from 'date-fns';import { useRouter } from 'next/navigation';export default function NotificationsPage() {  const [notifications, setNotifications] = useState([]);  const [loading, setLoading] = useState(true);  const router = useRouter();  useEffect(() => { loadNotifications(); }, []);  const loadNotifications = async () => {    try {      const { data } = await api.get('/notifications?limit=50');      setNotifications(data.notifications);    } catch (err) {      toast.error('Failed to load notifications');    } finally { setLoading(false); }  };  const markRead = async (id) => {    try {      await api.patch(`/notifications/${id}/read`);      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));    } catch { toast.error('Failed to mark read'); }  };  const markAllRead = async () => {    try {      await api.patch('/notifications/read-all');      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));      toast.success('All marked as read');    } catch { toast.error('Failed to mark all read'); }  };  const getIcon = (type) => {    switch(type) {      case 'marks_uploaded': return '📈';      case 'risk_changed': return '⚠️';      case 'alert_received': return '📩';      case 'goal_progress': return '🎯';      case 'system': return '⚙️';      default: return '🔔';    }  };  return (    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>        <div>          <button onClick={() => router.back()} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '13px', marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>            ← Back          </button>          <h1 style={{ fontSize: '28px', fontFamily: "'Space Grotesk', sans-serif" }}>Notifications</h1>        </div>        <button onClick={markAllRead} className="btn-secondary" style={{ fontSize: '13px' }}>          ✓ Mark All Read        </button>      </div>      {loading ? (        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading notifications...</div>      ) : notifications.length === 0 ? (        <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)' }}>          <div style={{ fontSize: '40px', marginBottom: '16px' }}>📭</div>          <h3 style={{ fontSize: '18px', color: 'var(--text-main)', marginBottom: '8px' }}>All caught up!</h3>          <p style={{ color: 'var(--text-muted)' }}>You have no notifications right now.</p>        </div>      ) : (        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>          {notifications.map(n => (            <div key={n._id}               onClick={() => !n.isRead && markRead(n._id)}              style={{                display: 'flex', gap: '16px', padding: '16px',                background: n.isRead ? 'var(--bg-card)' : 'rgba(99, 102, 241, 0.05)',                border: `1px solid ${n.isRead ? 'var(--border)' : 'var(--primary)'}`,                borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',                opacity: n.isRead ? 0.7 : 1              }}            >              <div style={{ fontSize: '24px', display: 'flex', alignItems: 'center' }}>                {getIcon(n.type)}              </div>              <div style={{ flex: 1 }}>                <h4 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>{n.title}</h4>                <p style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{n.message}</p>                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>                  {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}                </div>              </div>              {!n.isRead && (                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', alignSelf: 'center' }} />              )}            </div>          ))}        </div>      )}    </div>  );}

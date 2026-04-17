@@ -1,988 +1,1 @@
-import User from '../models/User.js';
-import Marks from '../models/Marks.js';
-import Attendance from '../models/Attendance.js';
-import Insight from '../models/Insight.js';
-import Alert from '../models/Alert.js';
-import AdminLog from '../models/AdminLog.js';
-import UploadLog from '../models/UploadLog.js';
-import { callGemini, callGeminiJSON, callGeminiWithParts, parseGeminiJSON } from '../services/geminiService.js';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import PDFDocument from 'pdfkit';
-import TeacherInsight from '../models/TeacherInsight.js';
-import { textToSpeech, testElevenLabsConnection } from '../services/voiceService.js';
-
-const mailer = {
-  sendMail: async () => { console.log('[Mailer Stub] Admin email sent'); }
-};
-
-
-const ALLOWED_AGG_STAGES = ['$match','$group','$project','$sort','$limit','$unwind','$lookup','$addFields','$count'];
-const queryHistory = [];
-
-export const getOverview = async (req, res) => {
-  try {
-    
-    const totalStudents = await User.countDocuments({ role: 'student' });
-    const insights = await Insight.find();
-    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;
-
-    const allMarks = await Marks.find();
-    const scores = allMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-    const passPercent = scores.length ? Math.round(scores.filter(s=>s>=40).length/scores.length*100) : 0;
-
-    const allAttendance = await Attendance.find();
-    const avgAttendance = allAttendance.length
-      ? Math.round(allAttendance.reduce((a,b)=>a+b.percentage,0)/allAttendance.length)
-      : 0;
-
-    const departments = ['CSE','IT','Mech','Civil'];
-    const departmentComparison = await Promise.all(departments.map(async (dept) => {
-      const deptMarks = allMarks.filter(m => m.department === dept);
-      const deptScores = deptMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-      const avgScore = deptScores.length ? Math.round(deptScores.reduce((a,b)=>a+b,0)/deptScores.length) : 0;
-      const deptPass = deptScores.length ? Math.round(deptScores.filter(s=>s>=40).length/deptScores.length*100) : 0;
-      return { department: dept, passPercent: deptPass, avgScore };
-    }));
-
-   
-    const semesters = [1,2,3,4];
-    const semesterTrend = semesters.map(sem => {
-      const semInsights = insights.filter(i => (i.semester || 4) === sem);
-      const avgCgpa = semInsights.length ? semInsights.reduce((a, b) => a + (b.cgpa || 0), 0) / semInsights.length : 0;
-      const avgDropoutScore = semInsights.length ? semInsights.reduce((a, b) => a + (b.dropoutProbabilityScore || 0), 0) / semInsights.length : 0;
-      
-      return { 
-        semester: `Sem ${sem}`, 
-        avgCgpa: parseFloat(avgCgpa.toFixed(2)), 
-        avgDropoutScore: Math.round(avgDropoutScore) 
-      };
-    });
-
-    const atRiskByTier = insights.reduce((acc, item) => {
-      const key = item.dropoutTier || item.riskLevel || 'LOW';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const deptStats = departmentComparison.map((d) => ({
-      department: d.department,
-      avgScore: d.avgScore,
-      passPercent: d.passPercent,
-    }));
-
-   
-    const totalFaculty = await User.countDocuments({ role: 'faculty' });
-
-   
-    const cgpaValues = insights.filter(i => i.cgpa != null).map(i => i.cgpa);
-    const avgCgpa = cgpaValues.length ? cgpaValues.reduce((a, b) => a + b, 0) / cgpaValues.length : 0;
-
-   
-    const byDepartment = departments.map(dept => {
-      const deptInsights = insights.filter(i => i.department === dept && i.riskLevel !== 'LOW');
-      return { department: dept, atRiskCount: deptInsights.length };
-    });
-
-   
-    const studentMap = new Map();
-    insights.filter(i => i.riskLevel !== 'LOW').forEach(ins => {
-      if (!studentMap.has(ins.studentId) || new Date(ins.createdAt) > new Date(studentMap.get(ins.studentId).createdAt)) {
-        studentMap.set(ins.studentId, ins);
-      }
-    });
-
-    const topAtRisk = Array.from(studentMap.values())
-      .sort((a, b) => (b.dropoutProbabilityScore || 0) - (a.dropoutProbabilityScore || 0))
-      .slice(0, 10);
-    const atRiskStudents = await Promise.all(topAtRisk.map(async (insight) => {
-      const user = await User.findOne({ studentId: insight.studentId }).select('name department').lean();
-      const studentAttendance = await Attendance.find({ studentId: insight.studentId });
-      const avgAtt = studentAttendance.length
-        ? Math.round(studentAttendance.reduce((a, b) => a + b.percentage, 0) / studentAttendance.length)
-        : 0;
-      return {
-        name: user?.name || insight.studentId,
-        studentId: insight.studentId,
-        department: user?.department || insight.department,
-        dropoutTier: insight.dropoutTier || insight.riskLevel,
-        cgpa: insight.cgpa,
-        avgAttendance: avgAtt,
-      };
-    }));
-
-   
-    const totalAtRisk = insights.filter(i => i.riskLevel !== 'LOW').length;
-    const interventionRate = totalAtRisk > 0 ? Math.round((totalAtRisk / totalStudents) * 100) : 0;
-
-    res.json({
-      totalStudents,
-      atRiskCount,
-      avgCgpa,
-      totalFaculty,
-      interventionRate,
-      byDepartment,
-      atRiskStudents,
-      atRiskByTier,
-      deptStats,
-      kpi: { totalStudents, overallPassPercent: passPercent, atRiskCount, avgAttendance },
-      departmentComparison,
-      semesterTrend,
-      trendArrows: { totalStudents: 'up', atRiskCount: 'up', avgAttendance: 'down' },
-      lastUpdatedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getAdminReportData = async (req, res) => {
-  try {
-    const totalStudents = await User.countDocuments({ role: 'student' });
-    const totalFaculty = await User.countDocuments({ role: 'faculty' });
-    const depts = await User.distinct('department');
-    const insights = await Insight.find().lean();
-    const atRiskCritical = await Insight.countDocuments({ riskLevel: 'CRITICAL' });
-    const atRiskHigh = await Insight.countDocuments({ riskLevel: 'HIGH' });
-    const atRiskMedium = await Insight.countDocuments({ riskLevel: 'MEDIUM' });
-    
-   
-    const overallCgpa = insights.length ? insights.reduce((a, b) => a + (b.cgpa || 0), 0) / insights.length : 0;
-    const allAttendance = await Attendance.find().select('percentage').lean();
-    const overallAttendance = allAttendance.length ? allAttendance.reduce((a, b) => a + b.percentage, 0) / allAttendance.length : 0;
-    
-    const allMarks = await Marks.find().lean();
-    const passRate = allMarks.length ? (allMarks.filter(m => {
-      const sum = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);
-      return sum >= 40;
-    }).length / allMarks.length) * 100 : 0;
-
-   
-    const interventionsTotal = insights.filter(i => i.riskLevel !== 'LOW').length;
-    const interventionsSuccessful = Math.floor(interventionsTotal * 0.7);
-    const interventionsPending = interventionsTotal - interventionsSuccessful;
-
-    res.json({
-      enrolment: { totalStudents, totalFaculty, departments: depts.length || 1 },
-      performance: { 
-        avgCgpa: parseFloat(overallCgpa.toFixed(2)), 
-        passRate: Math.round(passRate), 
-        attendance: Math.round(overallAttendance) 
-      },
-      atRisk: { 
-        critical: atRiskCritical, 
-        high: atRiskHigh, 
-        medium: atRiskMedium 
-      },
-      interventions: { 
-        total: interventionsTotal, 
-        successful: interventionsSuccessful, 
-        pending: interventionsPending 
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getTopAtRisk = async (req, res) => {
-  try {
-   
-    const highRisk = await Insight.find({ riskLevel: 'HIGH' }).sort({ cgpa: 1 }).limit(10);
-    const students = await Promise.all(highRisk.map(async (insight, idx) => {
-      const user = await User.findOne({ studentId: insight.studentId }).select('name department');
-      return {
-        rank: idx + 1,
-        name: user?.name || insight.studentId,
-        studentId: insight.studentId,
-        department: user?.department || insight.department,
-        riskLevel: insight.riskLevel,
-        riskReason: insight.riskReason,
-        classId: insight.classId,
-        dropoutProbabilityScore: insight.dropoutProbabilityScore || null,
-        dropoutTier: insight.dropoutTier || null,
-      };
-    }));
-    res.json({ students });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getTrends = async (req, res) => {
-  try {
-   
-    const allMarks = await Marks.find();
-    const departments = ['CSE','IT','Mech','Civil'];
-    const semesters = [1,2,3,4];
-    const trend = semesters.map(sem => {
-      const row = { semester: `Sem ${sem}` };
-      for (const dept of departments) {
-        const filtered = allMarks.filter(m => m.department === dept && m.semester === sem);
-        const scores = filtered.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-        row[dept] = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
-      }
-      return row;
-    });
-    res.json({ trend, departments });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const naturalLanguageQuery = async (req, res) => {
-  try {
-    const question = req.body.question || req.body.query;
-    const { voiceMode } = req.body;
-    if (!question) return res.status(400).json({ error: 'Question is required' });
-
-    
-    const prompt = `
-You are a SUTATE AI data engineer. Convert English questions about university data into valid MongoDB aggregation queries.
-Current Server Time: ${new Date().toISOString()}
-Random Session Seed: ${crypto.randomBytes(4).toString('hex')}
-
-Available collections:
-- users: { name, email, role, department, studentId }
-- marks: { studentId, classId, subject, department, semester, scores: { ut1, midSem, ut2, endSem } }
-- attendances: { studentId, classId, subject, department, semester, attended, total, percentage }
-- insights: { studentId, classId, department, cgpa, riskLevel, riskReason, classRank, dropoutProbabilityScore }
-
-Question: "${question}"
-
-RULES:
-1. Return ONLY the JSON object.
-2. NO comments 
-3. NO trailing commas.
-4. If results require a chart, use chartType: "bar", "line", or "pie".
-5. In the "answer" field, provide a dynamic, descriptive summary (2-3 sentences) that directly mentions some specific stats found.
-
-Response Format:
-{
-  "collection": "marks",
-  "pipeline": [ ... ],
-  "chartType": "bar",
-  "xKey": "_id",
-  "yKey": "avgScore",
-  "title": "Average Score Analysis",
-  "answer": "English summary for the administrator"
-}
-`;
-
-    let aiResult;
-    try {
-      const rawText = await callGemini(prompt, { maxTokens: 1000, temperature: 0.7 });
-      aiResult = parseGeminiJSON(rawText);
-      
-      if (!aiResult || !aiResult.pipeline) {
-        throw new Error('AI could not generate a valid pipeline');
-      }
-    } catch (err) {
-      console.error('[Admin/ask] Gemini error:', err.message);
-      return res.status(500).json({ error: 'AI Error: ' + err.message });
-    }
-
-   
-    const pipeline = aiResult.pipeline || [];
-    for (const stage of pipeline) {
-      const key = Object.keys(stage)[0];
-      if (!ALLOWED_AGG_STAGES.includes(key))
-        return res.status(400).json({ error: `Disallowed operator: ${key}` });
-    }
-
-   
-    const modelMap = {
-      marks: Marks,
-      users: User,
-      attendances: Attendance,
-      insights: Insight,
-    };
-
-    const Model = modelMap[aiResult.collection];
-    if (!Model) return res.status(400).json({ error: 'Unknown collection:' + aiResult.collection });
-
-    let data = [];
-    try {
-      data = await Model.aggregate(pipeline);
-    } catch (aggErr) {
-      console.error('[Admin/ask] Aggregation error:', aggErr);
-      return res.status(500).json({ error: 'Database query failed' });
-    }
-
-    const result = {
-      answer: aiResult.answer,
-      chartType: aiResult.chartType || 'bar',
-      xKey: aiResult.xKey || '_id',
-      yKey: aiResult.yKey || 'value',
-      title: aiResult.title || question,
-      data,
-      chartData: data,
-    };
-
-    queryHistory.unshift({ question, ...result, createdAt: new Date() });
-    if (queryHistory.length > 20) queryHistory.pop();
-
-    let audioData = null;
-    if (voiceMode && result.answer) {
-      try {
-        audioData = await textToSpeech(result.answer);
-      } catch (voiceErr) {
-        console.warn('[Admin/ask] Voice generation failed:', voiceErr.message);
-      }
-    }
-
-    res.json({
-      ...result,
-      audio: audioData,
-      voiceAvailable: !!audioData
-    });
-  } catch (err) {
-    console.error('[Admin/ask] Error:', err);
-    res.status(500).json({ error: 'AI query failed: ' + err.message });
-  }
-};
-
-export const getQueryHistory = async (req, res) => {
-  res.json({ history: queryHistory.slice(0, 5) });
-};
-
-export const downloadExecutiveReport = async (req, res) => {
-  let doc;
-  try {
-    const totalStudents = await User.countDocuments({ role: 'student' });
-    const insights = await Insight.find();
-    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;
-    const allMarks = await Marks.find();
-    const scores = allMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-    const passPercent = scores.length ? Math.round(scores.filter(s=>s>=40).length/scores.length*100) : 0;
-
-    doc = new PDFDocument({ margin: 40, size: 'A4' });
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="UniSight_Executive_Report.pdf"');
-    doc.pipe(res);
-
-    doc.fontSize(24).fillColor('#6366F1').font('Helvetica-Bold').text('SUTATE AI', { align: 'right' });
-    doc.fontSize(10).fillColor('#64748b').text('Executive Administration Panel', { align: 'right' });
-    doc.moveDown(2);
-
-    doc.fontSize(20).fillColor('#1e293b').font('Helvetica-Bold').text('Executive Academic Report');
-    doc.fontSize(10).fillColor('#64748b').text(`Period: Spring 2024 | Generated: ${new Date().toLocaleDateString()}`);
-    doc.moveDown();
-
-    doc.rect(40, doc.y, 520, 2).fill('#e2e8f0');
-    doc.moveDown();
-
-    doc.fontSize(14).fillColor('#6366f1').font('Helvetica-Bold').text('Key Performance Indicators');
-    doc.fontSize(11).fillColor('#333').font('Helvetica');
-    doc.text(`Total Students Enrolled: ${totalStudents}`);
-    doc.text(`Overall Pass Percentage: ${passPercent}%`);
-    doc.text(`Students At Risk (HIGH+MEDIUM): ${atRiskCount}`);
-    doc.moveDown();
-
-    doc.fontSize(14).fillColor('#f59e0b').font('Helvetica-Bold').text('Top At-Risk Students');
-    const topRisk = insights.filter(i => i.riskLevel === 'HIGH').slice(0, 10);
-    doc.fontSize(10).fillColor('#333');
-    for (const i of topRisk) {
-      doc.text(`- Student ID: ${i.studentId} | Dept: ${i.department} | Reason: ${i.riskReason}`);
-    }
-
-    doc.end();
-  } catch (err) {
-    console.error('[PDF] Executive report error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'PDF generation failed' });
-    } else {
-      if (doc) doc.end();
-      res.end();
-    }
-  }
-};
-
-export const getUsers = async (req, res) => {
-  try {
-    const { role, department, search, page = 1 } = req.query;
-    const query = {};
-    if (role) query.role = role;
-    if (department) query.department = department;
-    if (search) query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
-    ];
-    const limit = 20;
-    const skip = (parseInt(page) - 1) * limit;
-    
-    const total = await User.countDocuments(query);
-    const totalPages = Math.ceil(total / limit) || 1;
-    const users = await User.find(query).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit);
-    
-    res.json({ users, totalPages, currentPage: parseInt(page) });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const createUser = async (req, res) => {
-  try {
-    const { name, email, password, role, department, studentId } = req.body;
-
-   
-    if (!name || !email || !password || !role || !department) {
-      return res.status(400).json({
-        error: 'Name, email, password, role, and department are all required'
-      });
-    }
-
-   
-    if (role === 'student' && !studentId) {
-      return res.status(400).json({
-        error: 'Student ID (roll number) is required for student accounts. It must match the CSV exactly.'
-      });
-    }
-
-   
-    const emailExists = await User.findOne({ email: email.toLowerCase() });
-    if (emailExists) {
-      return res.status(409).json({
-        error: `Email ${email} is already registered`
-      });
-    }
-
-   
-    if (role === 'student' && studentId) {
-      const idExists = await User.findOne({ studentId: studentId.trim() });
-      if (idExists) {
-        return res.status(409).json({
-          error: `Student ID "${studentId}" is already assigned to another student`
-        });
-      }
-    }
-
-   
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-   
-    const newUser = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      role,
-      department: department.trim(),
-      studentId: role === 'student' ? studentId.trim() : null,
-      isFirstLogin: true,
-      admissionYear: role === 'student'
-        ? new Date().getFullYear()
-        : null,
-    });
-
-   
-    try {
-      const { sendWelcomeEmail } = await import('../services/emailService.js');
-      await sendWelcomeEmail({
-        name: newUser.name,
-        email: newUser.email,
-        password,        
-        role: newUser.role,
-      });
-    } catch (emailErr) {
-      console.error('Welcome email failed:', emailErr.message);
-     
-    }
-
-   
-    await AdminLog.create({
-      adminId: req.user.userId,
-      adminName: req.user.name,
-      action: 'created_user',
-      targetId: newUser._id.toString(),
-      targetType: 'user',
-      details: `Created ${role} "${name}" (${department}) — email: ${email}`,
-      ip: req.ip,
-    });
-
-    res.status(201).json({
-      user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        department: newUser.department,
-        studentId: newUser.studentId,
-      },
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created. Welcome email sent to ${email}.`,
-    });
-
-  } catch (err) {
-    console.error('createUser error:', err);
-    res.status(500).json({ error: 'Server error creating user' });
-  }
-};
-
-export const checkStudentId = async (req, res) => {
-  try {
-    const { id } = req.query;
-    if (!id) return res.json({ available: false });
-    const exists = await User.findOne({ studentId: id.trim() });
-    res.json({ available: !exists, takenBy: exists ? exists.name : null });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const exportUsers = async (req, res) => {
-  try {
-    const { role } = req.query;
-    const filter = role ? { role } : {};
-    const users = await User.find(filter).select('studentId name email department role createdAt');
-
-    const headers = 'studentId,name,email,department,role,createdAt';
-    const rows = users.map(u =>
-      `${u.studentId || ''},${u.name},${u.email},${u.department},${u.role},${u.createdAt.toISOString().split('T')[0]}`
-    );
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="registered-${role || 'users'}.csv"`);
-    res.send([headers, ...rows].join('\n'));
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getRegistrationHealth = async (req, res) => {
-  try {
-    const totalStudents = await User.countDocuments({ role: 'student' });
-    const enrolledIds = await Insight.distinct('studentId');
-    const studentsWithData = enrolledIds.length;
-    
-    const studentsWithNoData = await User.countDocuments({ 
-      role: 'student', 
-      studentId: { $nin: enrolledIds } 
-    });
-
-    const faculties = await User.find({ role: 'faculty' }).select('name email department');
-    const facultyWhoNeverUploaded = [];
-    const lastUploadByDept = {};
-
-    for (const f of faculties) {
-      const upload = await UploadLog.findOne({ facultyId: f._id }).sort({ createdAt: -1 });
-      if (!upload) {
-        facultyWhoNeverUploaded.push(f);
-      } else {
-        const dept = f.department;
-        if (!lastUploadByDept[dept] || upload.createdAt > lastUploadByDept[dept]) {
-          lastUploadByDept[dept] = upload.createdAt;
-        }
-      }
-    }
-
-    res.json({
-      totalStudents,
-      studentsWithData,
-      studentsWithNoData,
-      facultyWhoNeverUploaded,
-      lastUploadByDept
-    });
-  } catch (err) {
-    console.error('[RegistrationHealth]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-
-export const deleteUser = async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (user) {
-      await AdminLog.create({
-        adminId: req.user.userId, adminName: req.user.name,
-        action: 'deleted_user', targetId: req.params.id, targetType: 'user',
-        details: `Deleted user ${user.name} (${user.role})`, ip: req.ip,
-      });
-    }
-    res.json({ message: 'User removed' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const editUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, role, department, studentId, active } = req.body;
-
-    if (id === req.user.userId && role && role !== req.user.role)
-      return res.status(400).json({ error: 'You cannot change your own role' });
-
-    const updated = await User.findByIdAndUpdate(
-      id,
-      { ...(name && { name }), ...(email && { email: email.toLowerCase() }),
-        ...(role && { role }), ...(department && { department }),
-        ...(studentId !== undefined && { studentId }), ...(active !== undefined && { active }) },
-      { new: true, select: '-password' }
-    );
-    if (!updated) return res.status(404).json({ error: 'User not found' });
-
-    await AdminLog.create({
-      adminId: req.user.userId, adminName: req.user.name,
-      action: 'edited_user', targetId: id, targetType: 'user',
-      details: `Edited ${updated.name} — role: ${updated.role}, active: ${updated.active}`, ip: req.ip,
-    });
-    res.json({ user: updated, message: 'User updated successfully' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const bulkDeactivateUsers = async (req, res) => {
-  try {
-    const { userIds } = req.body;
-    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ error: 'No user IDs provided' });
-    }
-    
-    await User.updateMany(
-      { _id: { $in: userIds } },
-      { $set: { active: false } }
-    );
-    
-    await AdminLog.create({
-      adminId: req.user.userId, adminName: req.user.name,
-      action: 'bulk_deactivate', targetId: 'multiple', targetType: 'user',
-      details: `Deactivated ${userIds.length} users`, ip: req.ip,
-    });
-    res.json({ message: `${userIds.length} accounts deactivated successfully` });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const adminResetPassword = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const tempPassword = crypto.randomBytes(6).toString('base64').slice(0, 10);
-    user.password = await bcrypt.hash(tempPassword, 10);
-    user.isFirstLogin = true;
-    await user.save();
-
-    try {
-      await mailer.sendMail({
-        from: `"SUTATE AI" <${process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: 'Your SUTATE AI password has been reset',
-        html: `<div style="font-family:Arial,sans-serif;max-width:520px">
-          <h2 style="color:#6366f1">Password Reset</h2>
-          <p>Hi ${user.name},</p>
-          <p>Your account password was reset by an administrator.</p>
-          <p><strong>Temporary password:</strong> <code style="background:#f1f5f9;padding:4px 8px;border-radius:4px">${tempPassword}</code></p>
-          <p>Please log in and change your password immediately.</p>
-        </div>`,
-      });
-    } catch (mailErr) {
-      console.warn('[ResetPassword] Email send failed:', mailErr.message);
-    }
-
-    await AdminLog.create({
-      adminId: req.user.userId, adminName: req.user.name,
-      action: 'reset_password', targetId: user._id.toString(), targetType: 'user',
-      details: `Reset password for ${user.name} (${user.email})`, ip: req.ip,
-    });
-
-    res.json({ message: `Password reset. Temporary password sent to ${user.email}.` });
-  } catch (err) {
-    console.error('[AdminResetPassword]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getSystemHealth = async (req, res) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [pipelineRunsList, alertsToday, totalUsersCount, totalPipelineRuns, recentAdminLogs] = await Promise.all([
-      UploadLog.find().sort({ createdAt: -1 }).limit(1).lean(),
-      Alert.countDocuments({ sentAt: { $gte: today } }),
-      User.countDocuments(),
-      UploadLog.countDocuments(),
-      AdminLog.find().sort({ createdAt: -1 }).limit(8).lean(),
-    ]);
-    const lastError = await UploadLog.findOne({ status: 'error' }).sort({ createdAt: -1 }).lean();
-
-    res.json({
-      totalUsers: totalUsersCount,
-      pipelineRuns: totalPipelineRuns,
-      alertsToday,
-      activeSessionsNow: Math.floor(Math.random() * 20) + 5,
-      lastPipelineRun: pipelineRunsList[0]?.createdAt || null,
-      pipelineStatus: (pipelineRunsList[0]?.status === 'error' || lastError) ? 'error' : 'success',
-      avgProcessingTime: 450,
-      services: {
-        'Core Database': 'up',
-        'Authentication Flow': 'up',
-        'AI Processing Engine': 'up',
-        'Storage Bucket': 'up',
-      },
-      recentLogs: recentAdminLogs.map(log => ({
-        timestamp: log.createdAt,
-        level: 'info',
-        message: log.details,
-      })),
-      pipelineRunsList: pipelineRunsList.map(r => ({
-        uploadId: r.uploadId,
-        studentCount: r.studentCount,
-        status: r.status || 'complete',
-        createdAt: r.createdAt,
-      })),
-      lastPipelineError: lastError ? { message: lastError.errorMessage || 'Unknown error', occurredAt: lastError.updatedAt } : null,
-    });
-  } catch (err) {
-    console.error('[SystemHealth]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-
-export const getDeptDrilldown = async (req, res) => {
-  try {
-    const { dept } = req.params;
-    const marks = await Marks.find({ department: dept });
-    const attendance = await Attendance.find({ department: dept });
-    const insights = await Insight.find({ department: dept });
-    const students = await User.find({ role: 'student', department: dept }).select('name studentId');
-
-    const subjects = [...new Set(marks.map(m => m.subject))];
-
-   
-    const subjectStats = subjects.map(sub => {
-      const subMarks = marks.filter(m => m.subject === sub);
-      const scores = subMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-      const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;
-      const passPercent = scores.length ? Math.round(scores.filter(s=>s>=64).length/scores.length*100) : 0;
-
-      const subAtt = attendance.filter(a => a.subject === sub);
-      const avgAttendance = subAtt.length ? Math.round(subAtt.reduce((a,b)=>a+b.percentage,0)/subAtt.length) : 0;
-
-      return { subject: sub, avgScore, passPercent, avgAttendance };
-    });
-
-   
-    const riskDist = {
-      HIGH: insights.filter(i => i.riskLevel === 'HIGH').length,
-      MEDIUM: insights.filter(i => i.riskLevel === 'MEDIUM').length,
-      LOW: insights.filter(i => i.riskLevel === 'LOW').length,
-    };
-
-   
-    const worstSubject = subjectStats.sort((a,b) => a.passPercent - b.passPercent)[0];
-
-    res.json({
-      department: dept,
-      totalStudents: students.length,
-      subjectStats,
-      riskDistribution: riskDist,
-      worstSubject: worstSubject?.subject || null,
-      avgDeptScore: subjectStats.length ? Math.round(subjectStats.reduce((a,b)=>a+b.avgScore,0)/subjectStats.length) : 0,
-    });
-  } catch (err) {
-    console.error('[DeptDrilldown]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getInterventionScores = async (req, res) => {
-  try {
-    const insights = await Insight.find({ riskLevel: { $in: ['HIGH', 'MEDIUM'] } })
-      .sort({ cgpa: 1 }).limit(30);
-
-    const scored = await Promise.all(insights.map(async (insight) => {
-      const user = await User.findOne({ studentId: insight.studentId }).select('name department');
-      const attendance = await Attendance.find({ studentId: insight.studentId });
-      const marks = await Marks.find({ studentId: insight.studentId });
-
-      const avgAtt = attendance.length
-        ? Math.round(attendance.reduce((a,b)=>a+b.percentage,0)/attendance.length) : 0;
-      const lowAttCount = attendance.filter(a => a.percentage < 75).length;
-
-      const scores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-      const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;
-      const failCount = scores.filter(s => s < 64).length;
-
-     
-      const riskWeight = insight.riskLevel === 'HIGH' ? 40 : 20;
-      const attWeight = Math.max(0, ((75 - avgAtt) / 75) * 30);
-      const markWeight = Math.max(0, ((50 - avgScore) / 50) * 30);
-      const interventionScore = Math.min(100, Math.round(riskWeight + attWeight + markWeight));
-
-      return {
-        studentId: insight.studentId,
-        name: user?.name || insight.studentId,
-        department: user?.department || insight.department,
-        riskLevel: insight.riskLevel,
-        interventionScore,
-        avgScore,
-        avgAttendance: avgAtt,
-        failCount,
-        lowAttCount,
-        riskReason: insight.riskReason,
-      };
-    }));
-
-    scored.sort((a, b) => b.interventionScore - a.interventionScore);
-    res.json({ students: scored });
-  } catch (err) {
-    console.error('[InterventionScores]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getFacultyEffectivenessLeaderboard = async (req, res) => {
-  try {
-    const allFaculties = await User.find({ role: 'faculty' }).lean();
-    const insights = await TeacherInsight.find().lean();
-    
-    const leaderboard = allFaculties.map(faculty => {
-     
-      const facultyInsights = insights.filter(i => 
-        i.facultyId?.toString() === faculty._id.toString() || 
-        (!i.facultyId && i.department === faculty.department)
-      );
-      
-      const bestInsight = facultyInsights.sort((a, b) => b.effectivenessScore - a.effectivenessScore)[0];
-      
-      return {
-        facultyName: faculty.name,
-        department: faculty.department,
-        classId: bestInsight?.classId || 'N/A',
-        effectivenessScore: bestInsight?.effectivenessScore || 85,
-        classPassRate: bestInsight?.classPassRate || 80,
-        scoreChangeVsPrevSem: bestInsight?.scoreChangeVsPrevSem || 0,
-        teachingRecommendations: bestInsight?.teachingRecommendations || []
-      };
-    });
-    
-   
-    leaderboard.sort((a, b) => b.effectivenessScore - a.effectivenessScore);
-    
-    res.json({ leaderboard });
-  } catch (err) {
-    console.error('[Leaderboard Error]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const exportNaac = async (req, res) => {
-  let doc;
-  try {
-    const totalStudents = await User.countDocuments({ role: 'student' });
-    const allInsights = await Insight.find();
-    const passRate = allInsights.length ? Math.round(allInsights.filter(i => (i.cgpa*20) >= 40).length / allInsights.length * 100) : 0;
-
-    doc = new PDFDocument({ margin: 40, size: 'A4' });
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="NAAC_Audit_Export_2024.pdf"');
-    doc.pipe(res);
-
-    doc.fontSize(22).fillColor('#10b981').font('Helvetica-Bold').text('NAAC 2024 Quality Audit', { align: 'center' });
-    doc.fontSize(10).fillColor('#666').font('Helvetica').text('Criterion 2: Teaching-Learning and Evaluation', { align: 'center' });
-    doc.moveDown();
-
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('1. Institutional Performance Summary');
-    doc.fontSize(11).fillColor('#4b5563').font('Helvetica').text(`- Total Student Strength: ${totalStudents}`);
-    doc.text(`- Annual Average Pass Percentage: ${passRate}%`);
-    doc.moveDown();
-
-    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('2. Departmental Breakdown');
-    const depts = ['CSE', 'IT', 'Mech', 'Civil'];
-    for (const d of depts) {
-      const deptMarks = await Marks.find({ department: d });
-      const deptScores = deptMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
-      const avg = deptScores.length ? Math.round(deptScores.reduce((a,b)=>a+b,0)/deptScores.length*100/160) : 0;
-      doc.fontSize(11).fillColor('#4b5563').text(`- ${d}: Performance Index: ${avg}%`);
-    }
-
-    doc.end();
-  } catch (err) {
-    console.error('[PDF] NAAC Export error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to generate NAAC PDF' });
-    } else {
-      if (doc) doc.end();
-      res.end();
-    }
-  }
-};
-
-
-export const getAdminLogs = async (req, res) => {
-  try {
-    const { level, page = 1, limit = 50 } = req.query;
-    const skip = (page - 1) * limit;
-    
-    const logs = await AdminLog.find({})
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
-    
-    const formattedLogs = logs.map(log => ({
-      timestamp: log.createdAt,
-      level: log.action.includes('error') || log.action.includes('delete') ? 'error' : 
-             log.action.includes('reset') || log.action.includes('edit') ? 'warn' : 'info',
-      message: log.details || log.action,
-      userId: log.adminName || log.adminId,
-      ip: log.ip
-    }));
-    
-    const filtered = level && level !== 'all' 
-      ? formattedLogs.filter(log => log.level === level)
-      : formattedLogs;
-    
-    const total = await AdminLog.countDocuments({});
-    const totalPages = Math.ceil(total / limit);
-    
-    res.json({ logs: filtered, totalPages, currentPage: parseInt(page) });
-  } catch (err) {
-    console.error('[AdminLogs]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getVoiceStatus = async (req, res) => {
-  try {
-    const result = await testElevenLabsConnection();
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-};
-
-export const transcribeAudio = async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
-    
-    const audioBase64 = req.file.buffer.toString('base64');
-    let mimeType = req.file.mimetype;
-    
-   
-    if (!mimeType || mimeType === 'application/octet-stream') {
-      mimeType = 'audio/webm'; 
-    }
-
-    const text = await callGeminiWithParts([
-      "You are a highly precise dictation assistant. Transcribe the following audio accurately. Output ONLY the raw transcript text. Do not add quotes, introductory text, or descriptions. If there is no speech, output nothing.",
-      {
-        inlineData: {
-          mimeType: mimeType,
-          data: audioBase64
-        }
-      }
-    ]);
-    
-    res.json({ text: text.trim() });
-  } catch (err) {
-    console.error('[TranscribeAudio]', err);
-    res.status(500).json({ error: 'Audio transcription failed: ' + err.message });
-  }
-};
+import User from '../models/User.js';import Marks from '../models/Marks.js';import Attendance from '../models/Attendance.js';import Insight from '../models/Insight.js';import Alert from '../models/Alert.js';import AdminLog from '../models/AdminLog.js';import UploadLog from '../models/UploadLog.js';import { callGemini, callGeminiJSON, callGeminiWithParts, parseGeminiJSON } from '../services/geminiService.js';import bcrypt from 'bcryptjs';import crypto from 'crypto';import PDFDocument from 'pdfkit';import TeacherInsight from '../models/TeacherInsight.js';import { textToSpeech, testElevenLabsConnection } from '../services/voiceService.js';const mailer = {  sendMail: async () => { console.log('[Mailer Stub] Admin email sent'); }};const ALLOWED_AGG_STAGES = ['$match','$group','$project','$sort','$limit','$unwind','$lookup','$addFields','$count'];const queryHistory = [];export const getOverview = async (req, res) => {  try {    const totalStudents = await User.countDocuments({ role: 'student' });    const insights = await Insight.find();    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;    const allMarks = await Marks.find();    const scores = allMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));    const passPercent = scores.length ? Math.round(scores.filter(s=>s>=40).length/scores.length*100) : 0;    const allAttendance = await Attendance.find();    const avgAttendance = allAttendance.length      ? Math.round(allAttendance.reduce((a,b)=>a+b.percentage,0)/allAttendance.length)      : 0;    const departments = ['CSE','IT','Mech','Civil'];    const departmentComparison = await Promise.all(departments.map(async (dept) => {      const deptMarks = allMarks.filter(m => m.department === dept);      const deptScores = deptMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));      const avgScore = deptScores.length ? Math.round(deptScores.reduce((a,b)=>a+b,0)/deptScores.length) : 0;      const deptPass = deptScores.length ? Math.round(deptScores.filter(s=>s>=40).length/deptScores.length*100) : 0;      return { department: dept, passPercent: deptPass, avgScore };    }));    const semesters = [1,2,3,4];    const semesterTrend = semesters.map(sem => {      const semInsights = insights.filter(i => (i.semester || 4) === sem);      const avgCgpa = semInsights.length ? semInsights.reduce((a, b) => a + (b.cgpa || 0), 0) / semInsights.length : 0;      const avgDropoutScore = semInsights.length ? semInsights.reduce((a, b) => a + (b.dropoutProbabilityScore || 0), 0) / semInsights.length : 0;      return {         semester: `Sem ${sem}`,         avgCgpa: parseFloat(avgCgpa.toFixed(2)),         avgDropoutScore: Math.round(avgDropoutScore)       };    });    const atRiskByTier = insights.reduce((acc, item) => {      const key = item.dropoutTier || item.riskLevel || 'LOW';      acc[key] = (acc[key] || 0) + 1;      return acc;    }, {});    const deptStats = departmentComparison.map((d) => ({      department: d.department,      avgScore: d.avgScore,      passPercent: d.passPercent,    }));    const totalFaculty = await User.countDocuments({ role: 'faculty' });    const cgpaValues = insights.filter(i => i.cgpa != null).map(i => i.cgpa);    const avgCgpa = cgpaValues.length ? cgpaValues.reduce((a, b) => a + b, 0) / cgpaValues.length : 0;    const byDepartment = departments.map(dept => {      const deptInsights = insights.filter(i => i.department === dept && i.riskLevel !== 'LOW');      return { department: dept, atRiskCount: deptInsights.length };    });    const studentMap = new Map();    insights.filter(i => i.riskLevel !== 'LOW').forEach(ins => {      if (!studentMap.has(ins.studentId) || new Date(ins.createdAt) > new Date(studentMap.get(ins.studentId).createdAt)) {        studentMap.set(ins.studentId, ins);      }    });    const topAtRisk = Array.from(studentMap.values())      .sort((a, b) => (b.dropoutProbabilityScore || 0) - (a.dropoutProbabilityScore || 0))      .slice(0, 10);    const atRiskStudents = await Promise.all(topAtRisk.map(async (insight) => {      const user = await User.findOne({ studentId: insight.studentId }).select('name department').lean();      const studentAttendance = await Attendance.find({ studentId: insight.studentId });      const avgAtt = studentAttendance.length        ? Math.round(studentAttendance.reduce((a, b) => a + b.percentage, 0) / studentAttendance.length)        : 0;      return {        name: user?.name || insight.studentId,        studentId: insight.studentId,        department: user?.department || insight.department,        dropoutTier: insight.dropoutTier || insight.riskLevel,        cgpa: insight.cgpa,        avgAttendance: avgAtt,      };    }));    const totalAtRisk = insights.filter(i => i.riskLevel !== 'LOW').length;    const interventionRate = totalAtRisk > 0 ? Math.round((totalAtRisk / totalStudents) * 100) : 0;    res.json({      totalStudents,      atRiskCount,      avgCgpa,      totalFaculty,      interventionRate,      byDepartment,      atRiskStudents,      atRiskByTier,      deptStats,      kpi: { totalStudents, overallPassPercent: passPercent, atRiskCount, avgAttendance },      departmentComparison,      semesterTrend,      trendArrows: { totalStudents: 'up', atRiskCount: 'up', avgAttendance: 'down' },      lastUpdatedAt: new Date().toISOString(),    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getAdminReportData = async (req, res) => {  try {    const totalStudents = await User.countDocuments({ role: 'student' });    const totalFaculty = await User.countDocuments({ role: 'faculty' });    const depts = await User.distinct('department');    const insights = await Insight.find().lean();    const atRiskCritical = await Insight.countDocuments({ riskLevel: 'CRITICAL' });    const atRiskHigh = await Insight.countDocuments({ riskLevel: 'HIGH' });    const atRiskMedium = await Insight.countDocuments({ riskLevel: 'MEDIUM' });    const overallCgpa = insights.length ? insights.reduce((a, b) => a + (b.cgpa || 0), 0) / insights.length : 0;    const allAttendance = await Attendance.find().select('percentage').lean();    const overallAttendance = allAttendance.length ? allAttendance.reduce((a, b) => a + b.percentage, 0) / allAttendance.length : 0;    const allMarks = await Marks.find().lean();    const passRate = allMarks.length ? (allMarks.filter(m => {      const sum = (m.scores.ut1 || 0) + (m.scores.midSem || 0) + (m.scores.ut2 || 0) + (m.scores.endSem || 0);      return sum >= 40;    }).length / allMarks.length) * 100 : 0;    const interventionsTotal = insights.filter(i => i.riskLevel !== 'LOW').length;    const interventionsSuccessful = Math.floor(interventionsTotal * 0.7);    const interventionsPending = interventionsTotal - interventionsSuccessful;    res.json({      enrolment: { totalStudents, totalFaculty, departments: depts.length || 1 },      performance: {         avgCgpa: parseFloat(overallCgpa.toFixed(2)),         passRate: Math.round(passRate),         attendance: Math.round(overallAttendance)       },      atRisk: {         critical: atRiskCritical,         high: atRiskHigh,         medium: atRiskMedium       },      interventions: {         total: interventionsTotal,         successful: interventionsSuccessful,         pending: interventionsPending       },    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getTopAtRisk = async (req, res) => {  try {    const highRisk = await Insight.find({ riskLevel: 'HIGH' }).sort({ cgpa: 1 }).limit(10);    const students = await Promise.all(highRisk.map(async (insight, idx) => {      const user = await User.findOne({ studentId: insight.studentId }).select('name department');      return {        rank: idx + 1,        name: user?.name || insight.studentId,        studentId: insight.studentId,        department: user?.department || insight.department,        riskLevel: insight.riskLevel,        riskReason: insight.riskReason,        classId: insight.classId,        dropoutProbabilityScore: insight.dropoutProbabilityScore || null,        dropoutTier: insight.dropoutTier || null,      };    }));    res.json({ students });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getTrends = async (req, res) => {  try {    const allMarks = await Marks.find();    const departments = ['CSE','IT','Mech','Civil'];    const semesters = [1,2,3,4];    const trend = semesters.map(sem => {      const row = { semester: `Sem ${sem}` };      for (const dept of departments) {        const filtered = allMarks.filter(m => m.department === dept && m.semester === sem);        const scores = filtered.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));        row[dept] = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;      }      return row;    });    res.json({ trend, departments });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const naturalLanguageQuery = async (req, res) => {  try {    const question = req.body.question || req.body.query;    const { voiceMode } = req.body;    if (!question) return res.status(400).json({ error: 'Question is required' });    const prompt = `You are a SUTATE AI data engineer. Convert English questions about university data into valid MongoDB aggregation queries.Current Server Time: ${new Date().toISOString()}Random Session Seed: ${crypto.randomBytes(4).toString('hex')}Available collections:- users: { name, email, role, department, studentId }- marks: { studentId, classId, subject, department, semester, scores: { ut1, midSem, ut2, endSem } }- attendances: { studentId, classId, subject, department, semester, attended, total, percentage }- insights: { studentId, classId, department, cgpa, riskLevel, riskReason, classRank, dropoutProbabilityScore }Question: "${question}"RULES:1. Return ONLY the JSON object.2. NO comments 3. NO trailing commas.4. If results require a chart, use chartType: "bar", "line", or "pie".5. In the "answer" field, provide a dynamic, descriptive summary (2-3 sentences) that directly mentions some specific stats found.Response Format:{  "collection": "marks",  "pipeline": [ ... ],  "chartType": "bar",  "xKey": "_id",  "yKey": "avgScore",  "title": "Average Score Analysis",  "answer": "English summary for the administrator"}`;    let aiResult;    try {      const rawText = await callGemini(prompt, { maxTokens: 1000, temperature: 0.7 });      aiResult = parseGeminiJSON(rawText);      if (!aiResult || !aiResult.pipeline) {        throw new Error('AI could not generate a valid pipeline');      }    } catch (err) {      console.error('[Admin/ask] Gemini error:', err.message);      return res.status(500).json({ error: 'AI Error: ' + err.message });    }    const pipeline = aiResult.pipeline || [];    for (const stage of pipeline) {      const key = Object.keys(stage)[0];      if (!ALLOWED_AGG_STAGES.includes(key))        return res.status(400).json({ error: `Disallowed operator: ${key}` });    }    const modelMap = {      marks: Marks,      users: User,      attendances: Attendance,      insights: Insight,    };    const Model = modelMap[aiResult.collection];    if (!Model) return res.status(400).json({ error: 'Unknown collection:' + aiResult.collection });    let data = [];    try {      data = await Model.aggregate(pipeline);    } catch (aggErr) {      console.error('[Admin/ask] Aggregation error:', aggErr);      return res.status(500).json({ error: 'Database query failed' });    }    const result = {      answer: aiResult.answer,      chartType: aiResult.chartType || 'bar',      xKey: aiResult.xKey || '_id',      yKey: aiResult.yKey || 'value',      title: aiResult.title || question,      data,      chartData: data,    };    queryHistory.unshift({ question, ...result, createdAt: new Date() });    if (queryHistory.length > 20) queryHistory.pop();    let audioData = null;    if (voiceMode && result.answer) {      try {        audioData = await textToSpeech(result.answer);      } catch (voiceErr) {        console.warn('[Admin/ask] Voice generation failed:', voiceErr.message);      }    }    res.json({      ...result,      audio: audioData,      voiceAvailable: !!audioData    });  } catch (err) {    console.error('[Admin/ask] Error:', err);    res.status(500).json({ error: 'AI query failed: ' + err.message });  }};export const getQueryHistory = async (req, res) => {  res.json({ history: queryHistory.slice(0, 5) });};export const downloadExecutiveReport = async (req, res) => {  let doc;  try {    const totalStudents = await User.countDocuments({ role: 'student' });    const insights = await Insight.find();    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;    const allMarks = await Marks.find();    const scores = allMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));    const passPercent = scores.length ? Math.round(scores.filter(s=>s>=40).length/scores.length*100) : 0;    doc = new PDFDocument({ margin: 40, size: 'A4' });    res.setHeader('Content-Type', 'application/pdf');    res.setHeader('Content-Disposition', 'attachment; filename="UniSight_Executive_Report.pdf"');    doc.pipe(res);    doc.fontSize(24).fillColor('#6366F1').font('Helvetica-Bold').text('SUTATE AI', { align: 'right' });    doc.fontSize(10).fillColor('#64748b').text('Executive Administration Panel', { align: 'right' });    doc.moveDown(2);    doc.fontSize(20).fillColor('#1e293b').font('Helvetica-Bold').text('Executive Academic Report');    doc.fontSize(10).fillColor('#64748b').text(`Period: Spring 2024 | Generated: ${new Date().toLocaleDateString()}`);    doc.moveDown();    doc.rect(40, doc.y, 520, 2).fill('#e2e8f0');    doc.moveDown();    doc.fontSize(14).fillColor('#6366f1').font('Helvetica-Bold').text('Key Performance Indicators');    doc.fontSize(11).fillColor('#333').font('Helvetica');    doc.text(`Total Students Enrolled: ${totalStudents}`);    doc.text(`Overall Pass Percentage: ${passPercent}%`);    doc.text(`Students At Risk (HIGH+MEDIUM): ${atRiskCount}`);    doc.moveDown();    doc.fontSize(14).fillColor('#f59e0b').font('Helvetica-Bold').text('Top At-Risk Students');    const topRisk = insights.filter(i => i.riskLevel === 'HIGH').slice(0, 10);    doc.fontSize(10).fillColor('#333');    for (const i of topRisk) {      doc.text(`- Student ID: ${i.studentId} | Dept: ${i.department} | Reason: ${i.riskReason}`);    }    doc.end();  } catch (err) {    console.error('[PDF] Executive report error:', err);    if (!res.headersSent) {      res.status(500).json({ error: 'PDF generation failed' });    } else {      if (doc) doc.end();      res.end();    }  }};export const getUsers = async (req, res) => {  try {    const { role, department, search, page = 1 } = req.query;    const query = {};    if (role) query.role = role;    if (department) query.department = department;    if (search) query.$or = [      { name: { $regex: search, $options: 'i' } },      { email: { $regex: search, $options: 'i' } },    ];    const limit = 20;    const skip = (parseInt(page) - 1) * limit;    const total = await User.countDocuments(query);    const totalPages = Math.ceil(total / limit) || 1;    const users = await User.find(query).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit);    res.json({ users, totalPages, currentPage: parseInt(page) });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const createUser = async (req, res) => {  try {    const { name, email, password, role, department, studentId } = req.body;    if (!name || !email || !password || !role || !department) {      return res.status(400).json({        error: 'Name, email, password, role, and department are all required'      });    }    if (role === 'student' && !studentId) {      return res.status(400).json({        error: 'Student ID (roll number) is required for student accounts. It must match the CSV exactly.'      });    }    const emailExists = await User.findOne({ email: email.toLowerCase() });    if (emailExists) {      return res.status(409).json({        error: `Email ${email} is already registered`      });    }    if (role === 'student' && studentId) {      const idExists = await User.findOne({ studentId: studentId.trim() });      if (idExists) {        return res.status(409).json({          error: `Student ID "${studentId}" is already assigned to another student`        });      }    }    const hashedPassword = await bcrypt.hash(password, 10);    const newUser = await User.create({      name: name.trim(),      email: email.toLowerCase().trim(),      password: hashedPassword,      role,      department: department.trim(),      studentId: role === 'student' ? studentId.trim() : null,      isFirstLogin: true,      admissionYear: role === 'student'        ? new Date().getFullYear()        : null,    });    try {      const { sendWelcomeEmail } = await import('../services/emailService.js');      await sendWelcomeEmail({        name: newUser.name,        email: newUser.email,        password,                role: newUser.role,      });    } catch (emailErr) {      console.error('Welcome email failed:', emailErr.message);    }    await AdminLog.create({      adminId: req.user.userId,      adminName: req.user.name,      action: 'created_user',      targetId: newUser._id.toString(),      targetType: 'user',      details: `Created ${role} "${name}" (${department}) — email: ${email}`,      ip: req.ip,    });    res.status(201).json({      user: {        id: newUser._id,        name: newUser.name,        email: newUser.email,        role: newUser.role,        department: newUser.department,        studentId: newUser.studentId,      },      message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created. Welcome email sent to ${email}.`,    });  } catch (err) {    console.error('createUser error:', err);    res.status(500).json({ error: 'Server error creating user' });  }};export const checkStudentId = async (req, res) => {  try {    const { id } = req.query;    if (!id) return res.json({ available: false });    const exists = await User.findOne({ studentId: id.trim() });    res.json({ available: !exists, takenBy: exists ? exists.name : null });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const exportUsers = async (req, res) => {  try {    const { role } = req.query;    const filter = role ? { role } : {};    const users = await User.find(filter).select('studentId name email department role createdAt');    const headers = 'studentId,name,email,department,role,createdAt';    const rows = users.map(u =>      `${u.studentId || ''},${u.name},${u.email},${u.department},${u.role},${u.createdAt.toISOString().split('T')[0]}`    );    res.setHeader('Content-Type', 'text/csv');    res.setHeader('Content-Disposition', `attachment; filename="registered-${role || 'users'}.csv"`);    res.send([headers, ...rows].join('\n'));  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getRegistrationHealth = async (req, res) => {  try {    const totalStudents = await User.countDocuments({ role: 'student' });    const enrolledIds = await Insight.distinct('studentId');    const studentsWithData = enrolledIds.length;    const studentsWithNoData = await User.countDocuments({       role: 'student',       studentId: { $nin: enrolledIds }     });    const faculties = await User.find({ role: 'faculty' }).select('name email department');    const facultyWhoNeverUploaded = [];    const lastUploadByDept = {};    for (const f of faculties) {      const upload = await UploadLog.findOne({ facultyId: f._id }).sort({ createdAt: -1 });      if (!upload) {        facultyWhoNeverUploaded.push(f);      } else {        const dept = f.department;        if (!lastUploadByDept[dept] || upload.createdAt > lastUploadByDept[dept]) {          lastUploadByDept[dept] = upload.createdAt;        }      }    }    res.json({      totalStudents,      studentsWithData,      studentsWithNoData,      facultyWhoNeverUploaded,      lastUploadByDept    });  } catch (err) {    console.error('[RegistrationHealth]', err);    res.status(500).json({ error: 'Server error' });  }};export const deleteUser = async (req, res) => {  try {    const user = await User.findByIdAndDelete(req.params.id);    if (user) {      await AdminLog.create({        adminId: req.user.userId, adminName: req.user.name,        action: 'deleted_user', targetId: req.params.id, targetType: 'user',        details: `Deleted user ${user.name} (${user.role})`, ip: req.ip,      });    }    res.json({ message: 'User removed' });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const editUser = async (req, res) => {  try {    const { id } = req.params;    const { name, email, role, department, studentId, active } = req.body;    if (id === req.user.userId && role && role !== req.user.role)      return res.status(400).json({ error: 'You cannot change your own role' });    const updated = await User.findByIdAndUpdate(      id,      { ...(name && { name }), ...(email && { email: email.toLowerCase() }),        ...(role && { role }), ...(department && { department }),        ...(studentId !== undefined && { studentId }), ...(active !== undefined && { active }) },      { new: true, select: '-password' }    );    if (!updated) return res.status(404).json({ error: 'User not found' });    await AdminLog.create({      adminId: req.user.userId, adminName: req.user.name,      action: 'edited_user', targetId: id, targetType: 'user',      details: `Edited ${updated.name} — role: ${updated.role}, active: ${updated.active}`, ip: req.ip,    });    res.json({ user: updated, message: 'User updated successfully' });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const bulkDeactivateUsers = async (req, res) => {  try {    const { userIds } = req.body;    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {      return res.status(400).json({ error: 'No user IDs provided' });    }    await User.updateMany(      { _id: { $in: userIds } },      { $set: { active: false } }    );    await AdminLog.create({      adminId: req.user.userId, adminName: req.user.name,      action: 'bulk_deactivate', targetId: 'multiple', targetType: 'user',      details: `Deactivated ${userIds.length} users`, ip: req.ip,    });    res.json({ message: `${userIds.length} accounts deactivated successfully` });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const adminResetPassword = async (req, res) => {  try {    const user = await User.findById(req.params.id);    if (!user) return res.status(404).json({ error: 'User not found' });    const tempPassword = crypto.randomBytes(6).toString('base64').slice(0, 10);    user.password = await bcrypt.hash(tempPassword, 10);    user.isFirstLogin = true;    await user.save();    try {      await mailer.sendMail({        from: `"SUTATE AI" <${process.env.EMAIL_USER}>`,        to: user.email,        subject: 'Your SUTATE AI password has been reset',        html: `<div style="font-family:Arial,sans-serif;max-width:520px">          <h2 style="color:#6366f1">Password Reset</h2>          <p>Hi ${user.name},</p>          <p>Your account password was reset by an administrator.</p>          <p><strong>Temporary password:</strong> <code style="background:#f1f5f9;padding:4px 8px;border-radius:4px">${tempPassword}</code></p>          <p>Please log in and change your password immediately.</p>        </div>`,      });    } catch (mailErr) {      console.warn('[ResetPassword] Email send failed:', mailErr.message);    }    await AdminLog.create({      adminId: req.user.userId, adminName: req.user.name,      action: 'reset_password', targetId: user._id.toString(), targetType: 'user',      details: `Reset password for ${user.name} (${user.email})`, ip: req.ip,    });    res.json({ message: `Password reset. Temporary password sent to ${user.email}.` });  } catch (err) {    console.error('[AdminResetPassword]', err);    res.status(500).json({ error: 'Server error' });  }};export const getSystemHealth = async (req, res) => {  try {    const today = new Date();    today.setHours(0, 0, 0, 0);    const [pipelineRunsList, alertsToday, totalUsersCount, totalPipelineRuns, recentAdminLogs] = await Promise.all([      UploadLog.find().sort({ createdAt: -1 }).limit(1).lean(),      Alert.countDocuments({ sentAt: { $gte: today } }),      User.countDocuments(),      UploadLog.countDocuments(),      AdminLog.find().sort({ createdAt: -1 }).limit(8).lean(),    ]);    const lastError = await UploadLog.findOne({ status: 'error' }).sort({ createdAt: -1 }).lean();    res.json({      totalUsers: totalUsersCount,      pipelineRuns: totalPipelineRuns,      alertsToday,      activeSessionsNow: Math.floor(Math.random() * 20) + 5,      lastPipelineRun: pipelineRunsList[0]?.createdAt || null,      pipelineStatus: (pipelineRunsList[0]?.status === 'error' || lastError) ? 'error' : 'success',      avgProcessingTime: 450,      services: {        'Core Database': 'up',        'Authentication Flow': 'up',        'AI Processing Engine': 'up',        'Storage Bucket': 'up',      },      recentLogs: recentAdminLogs.map(log => ({        timestamp: log.createdAt,        level: 'info',        message: log.details,      })),      pipelineRunsList: pipelineRunsList.map(r => ({        uploadId: r.uploadId,        studentCount: r.studentCount,        status: r.status || 'complete',        createdAt: r.createdAt,      })),      lastPipelineError: lastError ? { message: lastError.errorMessage || 'Unknown error', occurredAt: lastError.updatedAt } : null,    });  } catch (err) {    console.error('[SystemHealth]', err);    res.status(500).json({ error: 'Server error' });  }};export const getDeptDrilldown = async (req, res) => {  try {    const { dept } = req.params;    const marks = await Marks.find({ department: dept });    const attendance = await Attendance.find({ department: dept });    const insights = await Insight.find({ department: dept });    const students = await User.find({ role: 'student', department: dept }).select('name studentId');    const subjects = [...new Set(marks.map(m => m.subject))];    const subjectStats = subjects.map(sub => {      const subMarks = marks.filter(m => m.subject === sub);      const scores = subMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));      const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;      const passPercent = scores.length ? Math.round(scores.filter(s=>s>=64).length/scores.length*100) : 0;      const subAtt = attendance.filter(a => a.subject === sub);      const avgAttendance = subAtt.length ? Math.round(subAtt.reduce((a,b)=>a+b.percentage,0)/subAtt.length) : 0;      return { subject: sub, avgScore, passPercent, avgAttendance };    });    const riskDist = {      HIGH: insights.filter(i => i.riskLevel === 'HIGH').length,      MEDIUM: insights.filter(i => i.riskLevel === 'MEDIUM').length,      LOW: insights.filter(i => i.riskLevel === 'LOW').length,    };    const worstSubject = subjectStats.sort((a,b) => a.passPercent - b.passPercent)[0];    res.json({      department: dept,      totalStudents: students.length,      subjectStats,      riskDistribution: riskDist,      worstSubject: worstSubject?.subject || null,      avgDeptScore: subjectStats.length ? Math.round(subjectStats.reduce((a,b)=>a+b.avgScore,0)/subjectStats.length) : 0,    });  } catch (err) {    console.error('[DeptDrilldown]', err);    res.status(500).json({ error: 'Server error' });  }};export const getInterventionScores = async (req, res) => {  try {    const insights = await Insight.find({ riskLevel: { $in: ['HIGH', 'MEDIUM'] } })      .sort({ cgpa: 1 }).limit(30);    const scored = await Promise.all(insights.map(async (insight) => {      const user = await User.findOne({ studentId: insight.studentId }).select('name department');      const attendance = await Attendance.find({ studentId: insight.studentId });      const marks = await Marks.find({ studentId: insight.studentId });      const avgAtt = attendance.length        ? Math.round(attendance.reduce((a,b)=>a+b.percentage,0)/attendance.length) : 0;      const lowAttCount = attendance.filter(a => a.percentage < 75).length;      const scores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));      const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;      const failCount = scores.filter(s => s < 64).length;      const riskWeight = insight.riskLevel === 'HIGH' ? 40 : 20;      const attWeight = Math.max(0, ((75 - avgAtt) / 75) * 30);      const markWeight = Math.max(0, ((50 - avgScore) / 50) * 30);      const interventionScore = Math.min(100, Math.round(riskWeight + attWeight + markWeight));      return {        studentId: insight.studentId,        name: user?.name || insight.studentId,        department: user?.department || insight.department,        riskLevel: insight.riskLevel,        interventionScore,        avgScore,        avgAttendance: avgAtt,        failCount,        lowAttCount,        riskReason: insight.riskReason,      };    }));    scored.sort((a, b) => b.interventionScore - a.interventionScore);    res.json({ students: scored });  } catch (err) {    console.error('[InterventionScores]', err);    res.status(500).json({ error: 'Server error' });  }};export const getFacultyEffectivenessLeaderboard = async (req, res) => {  try {    const allFaculties = await User.find({ role: 'faculty' }).lean();    const insights = await TeacherInsight.find().lean();    const leaderboard = allFaculties.map(faculty => {      const facultyInsights = insights.filter(i =>         i.facultyId?.toString() === faculty._id.toString() ||         (!i.facultyId && i.department === faculty.department)      );      const bestInsight = facultyInsights.sort((a, b) => b.effectivenessScore - a.effectivenessScore)[0];      return {        facultyName: faculty.name,        department: faculty.department,        classId: bestInsight?.classId || 'N/A',        effectivenessScore: bestInsight?.effectivenessScore || 85,        classPassRate: bestInsight?.classPassRate || 80,        scoreChangeVsPrevSem: bestInsight?.scoreChangeVsPrevSem || 0,        teachingRecommendations: bestInsight?.teachingRecommendations || []      };    });    leaderboard.sort((a, b) => b.effectivenessScore - a.effectivenessScore);    res.json({ leaderboard });  } catch (err) {    console.error('[Leaderboard Error]', err);    res.status(500).json({ error: 'Server error' });  }};export const exportNaac = async (req, res) => {  let doc;  try {    const totalStudents = await User.countDocuments({ role: 'student' });    const allInsights = await Insight.find();    const passRate = allInsights.length ? Math.round(allInsights.filter(i => (i.cgpa*20) >= 40).length / allInsights.length * 100) : 0;    doc = new PDFDocument({ margin: 40, size: 'A4' });    res.setHeader('Content-Type', 'application/pdf');    res.setHeader('Content-Disposition', 'attachment; filename="NAAC_Audit_Export_2024.pdf"');    doc.pipe(res);    doc.fontSize(22).fillColor('#10b981').font('Helvetica-Bold').text('NAAC 2024 Quality Audit', { align: 'center' });    doc.fontSize(10).fillColor('#666').font('Helvetica').text('Criterion 2: Teaching-Learning and Evaluation', { align: 'center' });    doc.moveDown();    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('1. Institutional Performance Summary');    doc.fontSize(11).fillColor('#4b5563').font('Helvetica').text(`- Total Student Strength: ${totalStudents}`);    doc.text(`- Annual Average Pass Percentage: ${passRate}%`);    doc.moveDown();    doc.fontSize(14).fillColor('#1f2937').font('Helvetica-Bold').text('2. Departmental Breakdown');    const depts = ['CSE', 'IT', 'Mech', 'Civil'];    for (const d of depts) {      const deptMarks = await Marks.find({ department: d });      const deptScores = deptMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));      const avg = deptScores.length ? Math.round(deptScores.reduce((a,b)=>a+b,0)/deptScores.length*100/160) : 0;      doc.fontSize(11).fillColor('#4b5563').text(`- ${d}: Performance Index: ${avg}%`);    }    doc.end();  } catch (err) {    console.error('[PDF] NAAC Export error:', err);    if (!res.headersSent) {      res.status(500).json({ error: 'Failed to generate NAAC PDF' });    } else {      if (doc) doc.end();      res.end();    }  }};export const getAdminLogs = async (req, res) => {  try {    const { level, page = 1, limit = 50 } = req.query;    const skip = (page - 1) * limit;    const logs = await AdminLog.find({})      .sort({ createdAt: -1 })      .skip(skip)      .limit(parseInt(limit))      .lean();    const formattedLogs = logs.map(log => ({      timestamp: log.createdAt,      level: log.action.includes('error') || log.action.includes('delete') ? 'error' :              log.action.includes('reset') || log.action.includes('edit') ? 'warn' : 'info',      message: log.details || log.action,      userId: log.adminName || log.adminId,      ip: log.ip    }));    const filtered = level && level !== 'all'       ? formattedLogs.filter(log => log.level === level)      : formattedLogs;    const total = await AdminLog.countDocuments({});    const totalPages = Math.ceil(total / limit);    res.json({ logs: filtered, totalPages, currentPage: parseInt(page) });  } catch (err) {    console.error('[AdminLogs]', err);    res.status(500).json({ error: 'Server error' });  }};export const getVoiceStatus = async (req, res) => {  try {    const result = await testElevenLabsConnection();    res.json(result);  } catch (err) {    res.status(500).json({ ok: false, error: err.message });  }};export const transcribeAudio = async (req, res) => {  try {    if (!req.file) return res.status(400).json({ error: 'No audio file provided' });    const audioBase64 = req.file.buffer.toString('base64');    let mimeType = req.file.mimetype;    if (!mimeType || mimeType === 'application/octet-stream') {      mimeType = 'audio/webm';     }    const text = await callGeminiWithParts([      "You are a highly precise dictation assistant. Transcribe the following audio accurately. Output ONLY the raw transcript text. Do not add quotes, introductory text, or descriptions. If there is no speech, output nothing.",      {        inlineData: {          mimeType: mimeType,          data: audioBase64        }      }    ]);    res.json({ text: text.trim() });  } catch (err) {    console.error('[TranscribeAudio]', err);    res.status(500).json({ error: 'Audio transcription failed: ' + err.message });  }};

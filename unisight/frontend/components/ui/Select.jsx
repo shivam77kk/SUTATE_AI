@@ -1,35 +1,1 @@
-'use client';
-import { ChevronDown } from 'lucide-react';
-
-export function Select({ value, onChange, options, placeholder = 'Select...', className = '' }) {
-  return (
-    <div style={{ position: 'relative' }}>
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className={`input-field ${className}`}
-        style={{
-          appearance: 'none',
-          paddingRight: 40,
-          cursor: 'pointer',
-          color: value ? '#f1f5f9' : '#334155',
-        }}
-      >
-        {placeholder && <option value="" disabled style={{ color: '#334155', background: '#0d0d1f' }}>{placeholder}</option>}
-        {options.map((opt) => {
-          const label = typeof opt === 'string' ? opt : opt.label;
-          const val = typeof opt === 'string' ? opt : opt.value;
-          return <option key={val} value={val} style={{ background: '#0d0d1f', color: '#f1f5f9' }}>{label}</option>;
-        })}
-      </select>
-      <div style={{
-        position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
-        pointerEvents: 'none', color: '#64748b',
-      }}>
-        <ChevronDown size={16} />
-      </div>
-    </div>
-  );
-}
-
-export default Select;
+'use client';import { ChevronDown } from 'lucide-react';export function Select({ value, onChange, options, placeholder = 'Select...', className = '' }) {  return (    <div style={{ position: 'relative' }}>      <select        value={value || ''}        onChange={(e) => onChange(e.target.value)}        className={`input-field ${className}`}        style={{          appearance: 'none',          paddingRight: 40,          cursor: 'pointer',          color: value ? '#f1f5f9' : '#334155',        }}      >        {placeholder && <option value="" disabled style={{ color: '#334155', background: '#0d0d1f' }}>{placeholder}</option>}        {options.map((opt) => {          const label = typeof opt === 'string' ? opt : opt.label;          const val = typeof opt === 'string' ? opt : opt.value;          return <option key={val} value={val} style={{ background: '#0d0d1f', color: '#f1f5f9' }}>{label}</option>;        })}      </select>      <div style={{        position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',        pointerEvents: 'none', color: '#64748b',      }}>        <ChevronDown size={16} />      </div>    </div>  );}export default Select;

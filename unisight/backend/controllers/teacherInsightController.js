@@ -1,23 +1,1 @@
-import TeacherInsight from '../models/TeacherInsight.js';
-
-export const getMyEffectiveness = async (req, res) => {
-  try {
-    const insight = await TeacherInsight.findOne({ facultyId: req.user.userId })
-      .sort({ createdAt: -1 });
-    if (!insight) return res.status(404).json({ error: 'No insights found' });
-    res.json(insight);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const getEffectivenessHistory = async (req, res) => {
-  try {
-    const history = await TeacherInsight.find({ facultyId: req.user.userId })
-      .sort({ createdAt: 1 })
-      .select('semester classId effectivenessScore classPassRate classAvgScore generatedAt');
-    res.json({ history });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
+import TeacherInsight from '../models/TeacherInsight.js';export const getMyEffectiveness = async (req, res) => {  try {    const insight = await TeacherInsight.findOne({ facultyId: req.user.userId })      .sort({ createdAt: -1 });    if (!insight) return res.status(404).json({ error: 'No insights found' });    res.json(insight);  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getEffectivenessHistory = async (req, res) => {  try {    const history = await TeacherInsight.find({ facultyId: req.user.userId })      .sort({ createdAt: 1 })      .select('semester classId effectivenessScore classPassRate classAvgScore generatedAt');    res.json({ history });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};

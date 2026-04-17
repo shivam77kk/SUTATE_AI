@@ -1,90 +1,1 @@
-'use client';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import api from '@/lib/axios';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { Tabs } from '@/components/ui/Tabs';
-import { CardSkel } from '@/components/ui/Skeleton';
-import toast from 'react-hot-toast';
-
-export default function ReportPage() {
-  const [tab, setTab] = useState('executive');
-  const [dlLoading, setDlLoading] = useState('');
-
-  const { data: report, isLoading } = useQuery({
-    queryKey: ['admin-report'],
-    queryFn: () => api.get('/admin/report').then(r => r.data),
-  });
-
-  const download = async (type) => {
-    setDlLoading(type);
-    try {
-      const res = await api.get(`/admin/report/${type}`, { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const a = document.createElement('a'); a.href = url; a.download = `SUTATE_${type}_Report.pdf`; a.click();
-      URL.revokeObjectURL(url);
-    } catch { toast.error('Failed to download report'); }
-    finally { setDlLoading(''); }
-  };
-
-  if (isLoading) return <div className="dashboard-content"><CardSkel height={400} /></div>;
-
-  const d = report || {};
-
-  return (
-    <div className="dashboard-content">
-      <PageHeader title="📄 Reports" subtitle="Generate and download institutional reports"
-        action={
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => download('executive')} disabled={dlLoading === 'executive'} style={{ padding: '10px 16px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 44 }}>
-              {dlLoading === 'executive' ? <><span className="spinner" />Generating...</> : '📥 Download PDF'}
-            </button>
-          </div>
-        }
-      />
-
-      <Tabs tabs={['executive', 'naac'].map(t => ({ label: t === 'executive' ? '📊 Executive Report' : '🏛️ NAAC Export', value: t }))} active={tab} onChange={setTab} variant="line" />
-
-      <div style={{ marginTop: 24 }}>
-        {tab === 'executive' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              { heading: '📊 Enrolment Overview', data: d.enrolment },
-              { heading: '🎓 Academic Performance', data: d.performance },
-              { heading: '📉 At-Risk Summary', data: d.atRisk },
-              { heading: '🎯 Interventions Summary', data: d.interventions },
-            ].map((section, i) => section.data && (
-              <div key={i} className="chart-container">
-                <div className="chart-title">{section.heading}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
-                  {Object.entries(section.data).map(([k, v]) => (
-                    <div key={k} style={{ textAlign: 'center', padding: '12px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 10 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Grotesk',sans-serif" }}>{typeof v === 'number' && v % 1 !== 0 ? v.toFixed(2) : v}</div>
-                      <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 4, textTransform: 'capitalize' }}>{k.replace(/([A-Z])/g, ' $1')}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'naac' && (
-          <div className="chart-container">
-            <div className="chart-title">🏛️ NAAC Self-Study Report Export</div>
-            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
-              Export your institutional data formatted for NAAC SSR compliance. The report includes student outcomes, faculty metrics, curriculum analysis, and intervention data.
-            </p>
-            <button onClick={() => download('naac')} disabled={dlLoading === 'naac'} style={{
-              padding: '12px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none',
-              color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8, minHeight: 48,
-            }}>
-              {dlLoading === 'naac' ? <><span className="spinner" />Generating NAAC export...</> : '🏛️ Export NAAC Report PDF'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+'use client';import { useState } from 'react';import { useQuery } from '@tanstack/react-query';import api from '@/lib/axios';import { PageHeader } from '@/components/shared/PageHeader';import { Tabs } from '@/components/ui/Tabs';import { CardSkel } from '@/components/ui/Skeleton';import toast from 'react-hot-toast';export default function ReportPage() {  const [tab, setTab] = useState('executive');  const [dlLoading, setDlLoading] = useState('');  const { data: report, isLoading } = useQuery({    queryKey: ['admin-report'],    queryFn: () => api.get('/admin/report').then(r => r.data),  });  const download = async (type) => {    setDlLoading(type);    try {      const res = await api.get(`/admin/report/${type}`, { responseType: 'blob' });      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));      const a = document.createElement('a'); a.href = url; a.download = `SUTATE_${type}_Report.pdf`; a.click();      URL.revokeObjectURL(url);    } catch { toast.error('Failed to download report'); }    finally { setDlLoading(''); }  };  if (isLoading) return <div className="dashboard-content"><CardSkel height={400} /></div>;  const d = report || {};  return (    <div className="dashboard-content">      <PageHeader title="📄 Reports" subtitle="Generate and download institutional reports"        action={          <div style={{ display: 'flex', gap: 10 }}>            <button onClick={() => download('executive')} disabled={dlLoading === 'executive'} style={{ padding: '10px 16px', borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 44 }}>              {dlLoading === 'executive' ? <><span className="spinner" />Generating...</> : '📥 Download PDF'}            </button>          </div>        }      />      <Tabs tabs={['executive', 'naac'].map(t => ({ label: t === 'executive' ? '📊 Executive Report' : '🏛️ NAAC Export', value: t }))} active={tab} onChange={setTab} variant="line" />      <div style={{ marginTop: 24 }}>        {tab === 'executive' && (          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>            {[              { heading: '📊 Enrolment Overview', data: d.enrolment },              { heading: '🎓 Academic Performance', data: d.performance },              { heading: '📉 At-Risk Summary', data: d.atRisk },              { heading: '🎯 Interventions Summary', data: d.interventions },            ].map((section, i) => section.data && (              <div key={i} className="chart-container">                <div className="chart-title">{section.heading}</div>                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>                  {Object.entries(section.data).map(([k, v]) => (                    <div key={k} style={{ textAlign: 'center', padding: '12px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 10 }}>                      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Grotesk',sans-serif" }}>{typeof v === 'number' && v % 1 !== 0 ? v.toFixed(2) : v}</div>                      <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 4, textTransform: 'capitalize' }}>{k.replace(/([A-Z])/g, ' $1')}</div>                    </div>                  ))}                </div>              </div>            ))}          </div>        )}        {tab === 'naac' && (          <div className="chart-container">            <div className="chart-title">🏛️ NAAC Self-Study Report Export</div>            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>              Export your institutional data formatted for NAAC SSR compliance. The report includes student outcomes, faculty metrics, curriculum analysis, and intervention data.            </p>            <button onClick={() => download('naac')} disabled={dlLoading === 'naac'} style={{              padding: '12px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none',              color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer',              display: 'flex', alignItems: 'center', gap: 8, minHeight: 48,            }}>              {dlLoading === 'naac' ? <><span className="spinner" />Generating NAAC export...</> : '🏛️ Export NAAC Report PDF'}            </button>          </div>        )}      </div>    </div>  );}
