@@ -56,41 +56,7 @@ export const getStudentProfile = async (req, res) => {
 
 export const getDashboard = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        cgpa: 8.42,
-        avgAttendance: 91,
-        dropoutProbability: 12,
-        dropoutTier: 'LOW',
-        classRank: 4,
-        rankMovement: 'up',
-        semester: 4,
-        attendanceTrend: [
-          { name: 'Mon', attendance: 100 },
-          { name: 'Tue', attendance: 80 },
-          { name: 'Wed', attendance: 100 },
-          { name: 'Thu', attendance: 90 },
-          { name: 'Fri', attendance: 85 },
-        ],
-        marksTrend: [
-          { subject: 'DBMS', score: 88, avg: 72 },
-          { subject: 'OS', score: 76, avg: 68 },
-          { subject: 'CN', score: 92, avg: 75 },
-          { subject: 'DSA', score: 85, avg: 70 },
-          { subject: 'Maths', score: 80, avg: 65 },
-        ],
-        radarData: [
-          { subject: 'Coding', A: 120, B: 110, fullMark: 150 },
-          { subject: 'Theory', A: 98, B: 130, fullMark: 150 },
-          { subject: 'Labs', A: 86, B: 130, fullMark: 150 },
-          { subject: 'Attendance', A: 99, B: 100, fullMark: 150 },
-          { subject: 'Assignments', A: 85, B: 90, fullMark: 150 },
-        ],
-        alerts: [
-          { id: 1, type: 'warning', message: 'OS Attendance is close to 75% limit.', date: new Date() }
-        ]
-      });
-    }
+    
     const { studentId } = req.user;
     const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
     if (!insight) return res.json({ cgpa: 0, dropoutProbability: 0, dropoutTier: 'LOW', recommendations: [], riskReason: null });
@@ -617,20 +583,7 @@ The correctIndex is 0-based (0 for first option, 3 for last).`;
 
 export const getLongitudinalData = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        trend: [
-          { semester: 'Sem 1', cgpa: 7.8 },
-          { semester: 'Sem 2', cgpa: 8.1 },
-          { semester: 'Sem 3', cgpa: 8.35 },
-          { semester: 'Sem 4', cgpa: 8.42 },
-        ],
-        events: [
-          { date: '2023-10-15', title: 'Mid-Sem Excellence', description: 'Scored top 5% in DBMS', icon: 'award' },
-          { date: '2024-01-20', title: 'Attendance Drop', description: 'Missed 3 labs in OS', icon: 'warning' },
-        ]
-      });
-    }
+    
     const { studentId } = req.user;
     const insights = await Insight.find({ studentId }).sort({ semester: 1 });
     const semesters = insights.map(i => ({

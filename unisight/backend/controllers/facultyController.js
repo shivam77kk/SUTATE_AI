@@ -127,14 +127,7 @@ Write a 150-200 word email that is warm but firm, explaining the concern and req
 
 export const getMyClasses = async (req, res) => {
   try {
-    if (false && !global.dbConnected) {
-      return res.json({
-        classes: [
-          { classId: 'CSE_SEM4_2024', department: 'CSE', semester: 4, studentCount: 15, atRiskCount: 3, uploadedAt: new Date(), status: 'complete' },
-          { classId: 'IT_SEM4_2024', department: 'IT', semester: 4, studentCount: 10, atRiskCount: 2, uploadedAt: new Date(), status: 'complete' },
-        ]
-      });
-    }    const facultyUser = await User.findById(req.user.userId).select('department');
+        const facultyUser = await User.findById(req.user.userId).select('department');
     const dept = facultyUser?.department;
 
    
@@ -191,16 +184,7 @@ export const getMyClasses = async (req, res) => {
 
 export const getPendingAlerts = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        hasAlerts: true,
-        count: 2,
-        students: [
-          { studentId: 'S007', name: 'Pooja Nair', riskLevel: 'HIGH', riskReason: 'Attendance < 65%', classId: 'CSE_SEM4_2024', avgScore: 42, avgAttendance: 64, dropoutProbabilityScore: 85, dropoutTier: 'HIGH' },
-          { studentId: 'S008', name: 'Dev Sharma', riskLevel: 'HIGH', riskReason: 'Marks declining', classId: 'CSE_SEM4_2024', avgScore: 48, avgAttendance: 58, dropoutProbabilityScore: 82, dropoutTier: 'HIGH' },
-        ]
-      });
-    }
+    
     const latestLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' })
       .sort({ createdAt: -1 });
 
@@ -267,15 +251,7 @@ export const getPendingAlerts = async (req, res) => {
 
 export const getClassSummary = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        kpi: { classAvgScore: 108, passPercent: 92, atRiskCount: 3, belowAttendanceCount: 2, totalStudents: 15 },
-        atRiskStudents: [
-          { studentId: 'S007', name: 'Pooja Nair', riskLevel: 'HIGH', riskReason: 'Attendance < 65%', avgScore: 42, avgAttendance: 64, dropoutProbabilityScore: 85, dropoutTier: 'HIGH', trend: 'down' },
-          { studentId: 'S008', name: 'Dev Sharma', riskLevel: 'HIGH', riskReason: 'Marks declining', avgScore: 48, avgAttendance: 58, dropoutProbabilityScore: 82, dropoutTier: 'HIGH', trend: 'down' },
-        ],
-      });
-    }
+    
     const classId = req.params.id;
     const insights = await Insight.find({ classId });
     const marks = await Marks.find({ classId });
@@ -343,17 +319,7 @@ export const getClassSummary = async (req, res) => {
 
 export const getClassHeatmap = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        students: ['S001', 'S007', 'S008'],
-        subjects: ['DBMS', 'OS', 'CN', 'DSA', 'Maths'],
-        data: [
-          { studentId: 'S001', name: 'Riya Shah', DBMS: 95, OS: 88, CN: 98, DSA: 92, Maths: 90, _avg: 93 },
-          { studentId: 'S007', name: 'Pooja Nair', DBMS: 45, OS: 38, CN: 52, DSA: 40, Maths: 35, _avg: 42 },
-          { studentId: 'S008', name: 'Dev Sharma', DBMS: 50, OS: 42, CN: 55, DSA: 45, Maths: 48, _avg: 48 },
-        ]
-      });
-    }
+    
     const classId = req.params.id;
     const marks = await Marks.find({ classId });
 
@@ -434,22 +400,7 @@ export const downloadClassReport = async (req, res) => {
 
 export const getStudentFullProfile = async (req, res) => {
   try {
-    if (!global.dbConnected) {
-      return res.json({
-        student: { name: 'Riya Shah', email: 'riya.shah@student.edu', studentId: 'S001', department: 'CSE' },
-        marks: [
-          { subject: 'DBMS', scores: { ut1: 28, midSem: 27, ut2: 29, endSem: 65 }, semester: 4, classId: 'CSE_SEM4_2024' },
-          { subject: 'OS', scores: { ut1: 24, midSem: 22, ut2: 25, endSem: 58 }, semester: 4, classId: 'CSE_SEM4_2024' },
-        ],
-        attendance: [
-          { subject: 'DBMS', attended: 22, total: 24, percentage: 92, status: 'safe' },
-          { subject: 'OS', attended: 20, total: 24, percentage: 83, status: 'warning' },
-        ],
-        insight: { riskLevel: 'LOW', riskReason: 'Consistent high performer.', recommendations: [], cgpa: 8.42, classRank: 4, classPercentile: 95, dropoutProbabilityScore: 12, dropoutTier: 'LOW' },
-        timeline: { events: [{ date: '2024-03-20', event: 'High quiz score in DBMS', severity: 'info' }] },
-        alerts: [],
-      });
-    }
+    
     const studentId = req.params.id;
     const student = await User.findOne({ studentId }).select('-password');
     const allMarks = await Marks.find({ studentId });

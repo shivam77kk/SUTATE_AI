@@ -12,7 +12,7 @@ export const geminiQueue = new PQueue({
   intervalCap: 10,
 });
 
-const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
 let modelIndex = 0;
 
 function getModel(generationConfig = {}) {

@@ -22,24 +22,7 @@ const queryHistory = [];
 
 export const getOverview = async (req, res) => {
   try {
-    if (false && !global.dbConnected) {
-      return res.json({
-        kpi: { totalStudents: 25, overallPassPercent: 88, atRiskCount: 5, avgAttendance: 84 },
-        departmentComparison: [
-          { department: 'CSE', passPercent: 92, avgScore: 115 },
-          { department: 'IT', passPercent: 85, avgScore: 108 },
-          { department: 'Mech', passPercent: 82, avgScore: 102 },
-          { department: 'Civil', passPercent: 78, avgScore: 95 },
-        ],
-        semesterTrend: [
-          { semester: 1, CSE: 105, IT: 98, Mech: 92, Civil: 88 },
-          { semester: 2, CSE: 110, IT: 102, Mech: 95, Civil: 90 },
-          { semester: 3, CSE: 112, IT: 105, Mech: 98, Civil: 92 },
-          { semester: 4, CSE: 115, IT: 108, Mech: 102, Civil: 95 },
-        ],
-        trendArrows: { totalStudents: 'up', atRiskCount: 'down', avgAttendance: 'up' }
-      });
-    }
+    
     const totalStudents = await User.countDocuments({ role: 'student' });
     const insights = await Insight.find();
     const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;
@@ -252,22 +235,7 @@ export const naturalLanguageQuery = async (req, res) => {
     const { voiceMode } = req.body;
     if (!question) return res.status(400).json({ error: 'Question is required' });
 
-    if (!global.dbConnected) {
-      return res.json({
-        answer: "Based on the CSE Sem 4 data, the average score is 84% with 3 students currently at high risk. This is a 5% improvement since the last month.",
-        chartType: "bar",
-        data: [
-          { name: "DBMS", value: 88 },
-          { name: "OS", value: 76 },
-          { name: "CN", value: 92 },
-          { name: "DSA", value: 85 },
-          { name: "Maths", value: 80 }
-        ],
-        xKey: "name",
-        yKey: "value",
-        title: "CSE Subject performance"
-      });
-    }
+    
     const prompt = `
 You are a SUTATE AI data engineer. Convert English questions about university data into valid MongoDB aggregation queries.
 Current Server Time: ${new Date().toISOString()}
