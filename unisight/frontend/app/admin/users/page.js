@@ -9,8 +9,25 @@ import { TableSkel, CardSkel } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { formatDistanceToNow, format } from 'date-fns';
 
 const ROLES = ['student', 'faculty', 'admin'];
+
+function TimeStamp({ date, label, color }) {
+  if (!date) return <span style={{ color: '#475569', fontStyle: 'italic', fontSize: 11 }}>--</span>;
+  const d = new Date(date);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {label && <div style={{ fontSize: 10, color: color || '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>}
+      <div style={{ fontSize: 11, color: '#f1f5f9', fontWeight: 600 }}>
+        {format(d, 'dd MMM yy, hh:mm a')}
+      </div>
+      <div style={{ fontSize: 10, color: '#64748b' }}>
+        {formatDistanceToNow(d, { addSuffix: true })}
+      </div>
+    </div>
+  );
+}
 
 function UserModal({ user, onClose, onSave, loading, error }) {
   const [form, setForm] = useState({
@@ -95,6 +112,8 @@ export default function UsersPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', tab, page, search],
     queryFn: () => api.get('/admin/users', { params: { role: tab === 'all' ? undefined : tab, page, search } }).then(r => r.data),
+    staleTime: 0,
+    refetchInterval: 30000,
   });
 
   const createMutation = useMutation({
@@ -166,24 +185,31 @@ export default function UsersPage() {
             <thead>
               <tr>
                 <th><input type="checkbox" onChange={e => setSelected(e.target.checked ? users.map(u => u._id) : [])} /></th>
-                <th>Name</th><th>Email</th><th>Role</th><th>Student ID</th><th>Dept</th><th>Status</th><th>Actions</th>
+                <th>Name</th><th>Email</th><th>Role</th><th>Dept</th><th>Status</th><th>Updated On</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u, i) => (
                 <tr key={i}>
                   <td><input type="checkbox" checked={selected.includes(u._id)} onChange={e => setSelected(prev => e.target.checked ? [...prev, u._id] : prev.filter(id => id !== u._id))} /></td>
-                  <td style={{ color: '#f1f5f9', fontWeight: 500 }}>{u.name}</td>
+                  <td style={{ color: '#f1f5f9', fontWeight: 500 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span>{u.name}</span>
+                      <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{u.studentId || ''}</span>
+                    </div>
+                  </td>
                   <td style={{ color: '#94a3b8', fontSize: 12 }}>{u.email}</td>
                   <td><span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', background: { student: 'rgba(99,102,241,0.12)', faculty: 'rgba(16,185,129,0.12)', admin: 'rgba(245,158,11,0.12)' }[u.role], color: { student: '#818cf8', faculty: '#34d399', admin: '#fbbf24' }[u.role] }}>{u.role}</span></td>
-                  <td style={{ fontFamily: 'monospace', color: '#64748b', fontSize: 12 }}>{u.studentId || '--'}</td>
                   <td style={{ color: '#64748b', fontSize: 12 }}>{u.department || '--'}</td>
                   <td>
                     <button onClick={() => deactivateMutation.mutate({ userId: u._id, active: !u.active })} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, border: 'none', cursor: 'pointer', background: u.active ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)', color: u.active ? '#10b981' : '#f43f5e', fontWeight: 700, minHeight: 28 }}>
                       {u.active ? 'Active' : 'Inactive'}
                     </button>
                   </td>
-                  <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <td>
+                    <TimeStamp date={u.updatedAt || u.createdAt} />
+                  </td>
+                  <td style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 14 }}>
                     <button onClick={() => { setEditUser(u); setModalError(''); setModalOpen(true); }} style={{ fontSize: 12, color: '#818cf8', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', minHeight: 36 }}>Edit</button>
                     <button onClick={() => { if (confirm(`Delete ${u.name}?`)) deleteMutation.mutate(u._id); }} style={{ fontSize: 12, color: '#fb7185', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', minHeight: 36 }}>Delete</button>
                   </td>
