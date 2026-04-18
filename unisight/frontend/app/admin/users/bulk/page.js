@@ -157,7 +157,7 @@ export default function BulkUserPage() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#f43f5e', marginBottom: 8 }}>Error Details:</div>
                   {results.errors.map((err, i) => (
                     <div key={i} style={{ fontSize: 12, color: '#fb7185', padding: '6px 0', borderBottom: '1px solid rgba(244,63,94,0.1)' }}>
-                      Row {err.row}: {err.message}
+                      Row {err.row}: {err.reason || err.message}
                     </div>
                   ))}
                 </div>

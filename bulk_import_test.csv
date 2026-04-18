@@ -1,0 +1,13 @@
+name,email,role,department,studentId,semester
+Ishan Kapoor,ishan.k2026@sutate.edu,student,Computer Science,SCS2311,5
+Meera Nair,meera.n2025@sutate.edu,student,Electrical Engineering,SEE5422,7
+Armaan Malik,armaan.m2027@sutate.edu,student,Computer Science,SCS7612,3
+Siya Reddy,siya.r2028@sutate.edu,student,Mechanical Engineering,SME1234,1
+Kabir Singh,kabir.s2026@sutate.edu,student,Civil Engineering,SCE8810,5
+Vihaan Das,vihaan.d2025@sutate.edu,student,Computer Science,SCS3191,7
+Ananya Joshi,ananya.j2027@sutate.edu,student,Electronics Engineering,SEL1155,3
+Rohan Gupta,rohan.g2028@sutate.edu,student,Computer Science,SCS5412,1
+Zara Khan,zara.k2026@sutate.edu,student,Information Technology,SIT4411,5
+Dev Patel,dev.p2025@sutate.edu,student,Data Science,SDS2910,7
+Dr. Rajesh Sharma,r.sharma198@sutate.edu,faculty,Computer Science,,
+Prof. Kavita Rao,k.rao554@sutate.edu,faculty,Mechanical Engineering,,
