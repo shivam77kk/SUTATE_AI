@@ -235,6 +235,7 @@ export const getPendingAlerts = async (req, res) => {
           avgAttendance,
           dropoutProbabilityScore: ctx.insight?.dropoutProbabilityScore || null,
           dropoutTier: ctx.insight?.dropoutTier || null,
+          identifiedAt: ctx.insight?.createdAt || new Date(),
         };
       })
     );

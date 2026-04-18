@@ -1,17 +1,37 @@
 'use client';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { formatDistanceToNow, format } from 'date-fns';
+
+function TimeStamp({ date, label, color }) {
+  if (!date) return null;
+  const d = new Date(date);
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: color || '#64748b' }}>
+      <span style={{ opacity: 0.7 }}>{label}</span>
+      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{format(d, 'dd MMM, hh:mm a')}</span>
+      <span style={{ opacity: 0.5 }}>({formatDistanceToNow(d, { addSuffix: true })})</span>
+    </div>
+  );
+}
 
 export default function FacultyAlerts() {
   const [sendingId, setSendingId] = useState(null);
   const [preview, setPreview] = useState(null);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['faculty-pending-alerts'] });
+  }, []);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['faculty-pending-alerts'],
     queryFn: () => api.get('/faculty/pending-alerts').then(r => r.data),
+    staleTime: 0,
+    refetchInterval: 15000,
   });
 
   const students = data?.students || [];
@@ -22,6 +42,7 @@ export default function FacultyAlerts() {
       const { data: resp } = await api.post('/faculty/send-alert', { studentId });
       setPreview({ email: resp.emailDraft, name: resp.sentTo || name });
       toast.success(`Alert generated for ${name}`);
+      refetch();
     } catch {
       toast.error('Failed to generate alert');
     } finally { setSendingId(null); }
@@ -85,7 +106,7 @@ export default function FacultyAlerts() {
           {students.map(s => {
             const rc = riskColor[s.riskLevel] || '#64748b';
             return (
-              <div key={s.studentId} className="animate-slideUp" style={{ background: 'var(--card-bg)', border: `1px solid rgba(255,255,255,0.06)`, borderLeft: `4px solid ${rc}`, borderRadius: '12px', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div key={s.studentId} className="animate-slideUp" style={{ background: 'var(--card-bg)', border: `1px solid rgba(255,255,255,0.06)`, borderLeft: `4px solid ${rc}`, borderRadius: '12px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: `${rc}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: '800', color: rc, flexShrink: 0, border: `1px solid ${rc}30` }}>
                   {s.name?.charAt(0)}
                 </div>
@@ -95,10 +116,14 @@ export default function FacultyAlerts() {
                     <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#64748b' }}>{s.studentId}</span>
                     <span className={`risk-badge risk-${s.riskLevel?.toLowerCase()}`}>{s.riskLevel}</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>{s.riskReason || 'AI flagged for intervention'}</div>
-                  <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#475569' }}>📊 Avg: {s.avgScore ?? '—'}%</span>
-                    <span style={{ fontSize: '11px', color: '#475569' }}>📅 Attendance: {s.avgAttendance ?? '—'}%</span>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: 6 }}>{s.riskReason || 'AI flagged for intervention'}</div>
+                  
+                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>📊 Avg: {s.avgScore ?? '—'}%</span>
+                    <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>📅 Attendance: {s.avgAttendance ?? '—'}%</span>
+                    
+                    <div style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.1)' }} />
+                    <TimeStamp date={s.identifiedAt} label="Identified" color="#818cf8" />
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
