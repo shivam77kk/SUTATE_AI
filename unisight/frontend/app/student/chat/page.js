@@ -62,9 +62,11 @@ export default function ChatPage() {
         setIsRecording(false);
       };
 
-      recognitionRef.current.onerror = () => {
+      recognitionRef.current.onerror = (e) => {
         setIsRecording(false);
-        toast.error('Voice recognition failed');
+        if (e.error !== 'aborted' && e.error !== 'no-speech') {
+          toast.error(`Voice recognition failed: ${e.error}`);
+        }
       };
 
       recognitionRef.current.onend = () => {
@@ -73,18 +75,24 @@ export default function ChatPage() {
     }
   }, []);
 
-  const toggleRecording = () => {
+  const toggleRecording = (e) => {
+    e?.preventDefault();
     if (!recognitionRef.current) {
       toast.error('Voice recognition not supported in this browser');
       return;
     }
-
     if (isRecording) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {}
       setIsRecording(false);
     } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        // Already started
+      }
     }
   };
 
@@ -229,22 +237,24 @@ export default function ChatPage() {
             <button
               onClick={toggleRecording}
               disabled={loading}
+              title={isRecording ? 'Listening... click to stop' : 'Click to speak'}
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 10,
-                background: isRecording ? 'linear-gradient(135deg,#f43f5e,#dc2626)' : 'rgba(99,102,241,0.12)',
-                border: `1px solid ${isRecording ? '#f43f5e' : 'rgba(99,102,241,0.3)'}`,
-                color: 'white',
+                background: isRecording ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)',
+                border: `1px solid ${isRecording ? '#22c55e' : '#ef4444'}`,
+                color: isRecording ? '#22c55e' : '#ef4444',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
                 transition: 'all 0.2s',
+                boxShadow: isRecording ? '0 0 15px rgba(34,197,94,0.4)' : 'none',
               }}
             >
-              {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+              {isRecording ? <Mic size={20} /> : <MicOff size={20} />}
             </button>
           )}
           <textarea

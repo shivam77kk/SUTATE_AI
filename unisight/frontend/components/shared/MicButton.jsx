@@ -36,10 +36,10 @@ export default function MicButton({
         minWidth: dim,
         minHeight: dim,
         borderRadius: '50%',
-        border: `2px solid ${isListening ? '#ef4444' : accent}`,
+        border: `2px solid ${isListening ? '#22c55e' : '#ef4444'}`,
         background: isListening
-          ? 'rgba(239,68,68,0.85)'
-          : 'rgba(255,255,255,0.04)',
+          ? 'rgba(34,197,94,0.2)'
+          : 'rgba(239,68,68,0.15)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -49,20 +49,20 @@ export default function MicButton({
         flexShrink: 0,
         animation: isListening ? 'micPulse 1.2s ease-in-out infinite' : 'none',
         boxShadow: isListening
-          ? '0 0 20px rgba(239,68,68,0.5)'
-          : `0 0 0 transparent`,
+          ? '0 0 20px rgba(34,197,94,0.5)'
+          : '0 0 0 transparent',
       }}
     >
       {isListening ? (
-        <MicOff size={iconSize} color="#fff" />
+        <Mic size={iconSize} color="#22c55e" />
       ) : (
-        <Mic size={iconSize} color={accent} />
+        <MicOff size={iconSize} color="#ef4444" />
       )}
       {/* Inline keyframes for pulse animation */}
       <style jsx>{`
         @keyframes micPulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(239,68,68,0.3); }
-          50% { transform: scale(1.08); box-shadow: 0 0 25px rgba(239,68,68,0.6); }
+          0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(34,197,94,0.3); }
+          50% { transform: scale(1.08); box-shadow: 0 0 25px rgba(34,197,94,0.6); }
         }
       `}</style>
     </button>
