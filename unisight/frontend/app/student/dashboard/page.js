@@ -324,48 +324,66 @@ function MoodCard({ onDismiss }) {
 
 export default function StudentDashboard() {
   const { user } = useAuthStore();
+  const qc = useQueryClient();
   const [moodDismissed, setMoodDismissed] = useState(false);
   const [pollDone, setPollDone] = useState(false);
   const [pollRating, setPollRating] = useState(null);
 
+  // Force-invalidate all student queries every time the dashboard mounts
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['student-dashboard'] });
+    qc.invalidateQueries({ queryKey: ['marks-trend'] });
+    qc.invalidateQueries({ queryKey: ['student-radar'] });
+    qc.invalidateQueries({ queryKey: ['student-attendance'] });
+    qc.invalidateQueries({ queryKey: ['student-profile'] });
+  }, []);
+
   const { data: dashboard, isLoading: dashLoading } = useQuery({
     queryKey: ['student-dashboard'],
     queryFn: () => api.get('/student/dashboard').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: moodStatus } = useQuery({
     queryKey: ['mood-status'],
     queryFn: () => api.get('/mood/status').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: activePoll } = useQuery({
     queryKey: ['active-poll'],
     queryFn: () => api.get('/polls/active').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: marksTrend, isLoading: marksLoading } = useQuery({
     queryKey: ['marks-trend'],
     queryFn: () => api.get('/student/marks-trend').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: radar, isLoading: radarLoading } = useQuery({
     queryKey: ['student-radar'],
     queryFn: () => api.get('/student/radar').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: attendance, isLoading: attLoading } = useQuery({
     queryKey: ['student-attendance'],
     queryFn: () => api.get('/student/attendance').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: activity } = useQuery({
     queryKey: ['student-activity'],
     queryFn: () => api.get('/student/activity').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: goalData } = useQuery({
     queryKey: ['student-goals'],
     queryFn: () => api.get('/student/goals').then(r => r.data),
+    staleTime: 0,
   });
 
   const submitPoll = async (rating, pollId) => {

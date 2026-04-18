@@ -1,6 +1,6 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import useAuthStore from '@/store/authStore';
 import { CardSkel } from '@/components/ui/Skeleton';
@@ -29,14 +29,22 @@ export default function ProfilePage() {
   const [tab, setTab] = useState('profile');
   const TABS = ['profile', 'achievements', 'parent'];
 
+  // Force fresh data every time profile page mounts
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['student-profile'] });
+    qc.invalidateQueries({ queryKey: ['student-achievements'] });
+  }, []);
+
   const { data: profile, isLoading } = useQuery({
     queryKey: ['student-profile'],
     queryFn: () => api.get('/student/me').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: achievements } = useQuery({
     queryKey: ['student-achievements'],
     queryFn: () => api.get('/student/achievements').then(r => r.data),
+    staleTime: 0,
   });
 
   const downloadPDF = async () => {

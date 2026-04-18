@@ -1,1 +1,591 @@
-import User from '../models/User.js';import Marks from '../models/Marks.js';import Attendance from '../models/Attendance.js';import Insight from '../models/Insight.js';import Alert from '../models/Alert.js';import UploadLog from '../models/UploadLog.js';import TeacherInsight from '../models/TeacherInsight.js';import PDFDocument from 'pdfkit';import { callGemini } from '../services/geminiService.js';import { textToSpeech } from '../services/voiceService.js';export const getFacultyDashboard = async (req, res) => {  try {    const latestCompleteLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' }).sort({ createdAt: -1 });    const recentUploads = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).limit(5);    const latestUploadKpi = latestCompleteLog      ? { processed: latestCompleteLog.studentCount || 0, atRiskFound: latestCompleteLog.pendingAlerts?.length || 0, improvements: 0 }      : null;    let proactiveAlerts = [];    if (latestCompleteLog && latestCompleteLog.pendingAlerts?.length) {           const studentIds = latestCompleteLog.pendingAlerts.slice(0, 5);      proactiveAlerts = await Promise.all(studentIds.map(async (id) => {        const user = await User.findOne({ studentId: id }).select('name department').lean();        const insight = await Insight.findOne({ studentId: id }).sort({ createdAt: -1 }).lean();        return {          studentId: id,          name: user?.name || id,          riskLevel: insight?.riskLevel || 'HIGH',          dropoutTier: insight?.dropoutTier || 'HIGH',          reason: insight?.riskReason || 'Performance needs review',          riskReason: insight?.riskReason || 'Performance needs review',        };      }));    } else {           const facultyUser = await User.findById(req.user.userId).select('department');      const dept = facultyUser?.department;      const riskInsights = await Insight.find(        dept ? { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] }, department: dept }             : { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] } }      ).sort({ dropoutProbabilityScore: -1 }).limit(6).lean();      proactiveAlerts = await Promise.all(riskInsights.map(async (ins) => {        const user = await User.findOne({ studentId: ins.studentId }).select('name').lean();        return {          studentId: ins.studentId,          name: user?.name || ins.studentId,          riskLevel: ins.riskLevel,          dropoutTier: ins.dropoutTier || ins.riskLevel,          reason: ins.riskReason || 'Performance needs review',          riskReason: ins.riskReason || 'Performance needs review',        };      }));    }    res.json({      latestUploadKpi,      recentUploads: recentUploads.map(u => ({        _id: u._id,        filename: u.originalFilename,        date: u.createdAt,        status: u.status?.toUpperCase() || 'PENDING',        entries: u.studentCount || 0,        errors: u.errorCount || 0,      })),      proactiveAlerts,    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const sendStudentAlert = async (req, res) => {  try {    const { studentId } = req.body;    if (!studentId) return res.status(400).json({ error: 'studentId is required' });    const student = await User.findOne({ studentId }).select('name email');    const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });    const marks = await Marks.find({ studentId });    const attendance = await Attendance.find({ studentId });    const marksSummary = marks.map(m => {      const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);      return `${m.subject}: ${total}/160`;    }).join(', ');    const attSummary = attendance.map(a => `${a.subject}: ${a.percentage}%`).join(', ');    const prompt = `You are a university teacher. Write a professional, empathetic email to a student named ${student?.name || studentId} about their academic performance.Student data:- Risk Level: ${insight?.riskLevel || 'MEDIUM'}- Risk Reason: ${insight?.riskReason || 'Poor academic performance'}- Marks: ${marksSummary || 'No marks data'}- Attendance: ${attSummary || 'No attendance data'}Write a 150-200 word email that is warm but firm, explaining the concern and requesting them to take corrective action. Include a subject line at the top.`;    let emailText;    try {      emailText = await callGemini(prompt, { maxTokens: 400 });    } catch (geminiErr) {      console.error('[SendAlert] Gemini failed:', geminiErr.message);      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });    }       await Alert.create({      studentId,      facultyId: req.user.userId,      emailSubject: `Academic Performance Alert — ${studentId}`,      emailBody: emailText,      sentAt: new Date(),    });    res.json({ success: true, emailDraft: emailText, sentTo: student?.name || studentId });  } catch (err) {    res.status(500).json({ error: 'Failed to generate alert: ' + err.message });  }};export const getMyClasses = async (req, res) => {  try {        const facultyUser = await User.findById(req.user.userId).select('department');    const dept = facultyUser?.department;       const logs = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).lean();    const insights = await Insight.find(dept ? { department: dept } : {}).lean();    const classMap = {};       for (const ins of insights) {      const cid = ins.classId;      if (!cid) continue;      if (!classMap[cid]) {        classMap[cid] = {          classId: cid,          department: ins.department || dept,          semester: ins.semester || 4,          studentCount: 0,          atRiskCount: 0,          uploadedAt: ins.createdAt,          status: 'complete',        };      }      classMap[cid].studentCount++;      if (ins.riskLevel && ins.riskLevel !== 'LOW') classMap[cid].atRiskCount++;    }       for (const log of logs) {      if (!classMap[log.classId]) {        classMap[log.classId] = {          classId: log.classId,          department: log.department,          semester: log.semester || 4,          studentCount: log.studentCount || 0,          atRiskCount: log.pendingAlerts?.length || 0,          uploadedAt: log.createdAt,          status: log.status,        };      } else {               classMap[log.classId].status = log.status;        if (log.studentCount > 0) classMap[log.classId].studentCount = log.studentCount;      }    }    const classes = Object.values(classMap).sort((a,b) => b.uploadedAt - a.uploadedAt);    res.json({ classes });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getPendingAlerts = async (req, res) => {  try {        const latestLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' })      .sort({ createdAt: -1 });    let studentIds = [];    let sourceClassId = null;    if (latestLog && latestLog.pendingAlerts?.length) {      studentIds = latestLog.pendingAlerts;      sourceClassId = latestLog.classId;    } else {           const facultyUser = await User.findById(req.user.userId).select('department');      const dept = facultyUser?.department;      const riskInsights = await Insight.find(        dept          ? { riskLevel: { $in: ['HIGH', 'MEDIUM'] }, department: dept }          : { riskLevel: { $in: ['HIGH', 'MEDIUM'] } }      ).sort({ riskLevel: 1, cgpa: 1 }).limit(20);      studentIds = riskInsights.map(i => i.studentId);    }    if (!studentIds.length) {      return res.json({ hasAlerts: false, count: 0, students: [] });    }    const studentData = await Promise.all(      studentIds.slice(0, 20).map(async (studentId) => {        const user = await User.findOne({ studentId }).select('name studentId');        const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });        const marks = await Marks.find({ studentId });        const attendance = await Attendance.find({ studentId });        const scores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));        const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;        const avgAttendance = attendance.length          ? Math.round(attendance.reduce((a,b)=>a+b.percentage,0)/attendance.length) : 0;        return {          studentId,          name: user?.name || studentId,          riskLevel: insight?.riskLevel || 'MEDIUM',          riskReason: insight?.riskReason || 'At-risk flagged by system',          classId: sourceClassId || insight?.classId || null,          avgScore,          avgAttendance,          dropoutProbabilityScore: insight?.dropoutProbabilityScore || null,          dropoutTier: insight?.dropoutTier || null,        };      })    );       studentData.sort((a, b) => {      const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };      return (order[a.riskLevel] ?? 2) - (order[b.riskLevel] ?? 2);    });    res.json({ hasAlerts: studentData.length > 0, count: studentData.length, students: studentData });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getClassSummary = async (req, res) => {  try {        const classId = req.params.id;    const insights = await Insight.find({ classId });    const marks = await Marks.find({ classId });    const attendance = await Attendance.find({ classId });    const totalStudents = insights.length;    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;    const allScores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));    const classAvgScore = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;    const passPercent = allScores.length ? Math.round(allScores.filter(s=>s>=40).length/allScores.length*100) : 0;    const belowAttendanceCount = attendance.filter(a => a.percentage < 75).length;    const atRiskStudents = await Promise.all(      insights.filter(i => i.riskLevel !== 'LOW').map(async (insight) => {        const user = await User.findOne({ studentId: insight.studentId }).select('name');        const stuMarks = marks.filter(m => m.studentId === insight.studentId);        const stuScores = stuMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));        const avgScore = stuScores.length ? Math.round(stuScores.reduce((a,b)=>a+b,0)/stuScores.length) : 0;        const stuAtt = attendance.filter(a => a.studentId === insight.studentId);        const avgAttendance = stuAtt.length ? Math.round(stuAtt.reduce((a,b)=>a+b.percentage,0)/stuAtt.length) : 0;        return {          studentId: insight.studentId,          name: user?.name || insight.studentId,          riskLevel: insight.riskLevel,          riskReason: insight.riskReason,          avgScore,          avgAttendance,          dropoutProbabilityScore: insight.dropoutProbabilityScore || null,          dropoutTier: insight.dropoutTier || null,          trend: avgScore < 50 ? 'down' : 'same',        };      })    );    const students = await Promise.all(      insights.map(async (ins) => {        const user = await User.findOne({ studentId: ins.studentId }).select('name');        return {          studentId: ins.studentId,          name: user?.name || ins.studentId,          dropoutTier: ins.dropoutTier || ins.riskLevel || 'LOW',          cgpa: ins.cgpa || 0,        };      })    );    const heatmap = marks.slice(0, 20).map((m) => ({      studentId: m.studentId,      subject: m.subject,      score: (m.scores?.ut1 || 0) + (m.scores?.midSem || 0) + (m.scores?.ut2 || 0) + (m.scores?.endSem || 0),    }));    const narrative = `Class ${classId} has ${atRiskCount} at-risk students out of ${totalStudents}. ${atRiskCount > 0 ? 'Performance review recommended for flagged students.' : 'Class performance is stable.'}`;    res.json({      students,      heatmap,      narrative,      kpi: { classAvgScore, passPercent, atRiskCount, belowAttendanceCount, totalStudents },      atRiskStudents,    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getClassHeatmap = async (req, res) => {  try {        const classId = req.params.id;    const marks = await Marks.find({ classId });    const studentIds = [...new Set(marks.map(m => m.studentId))];    const subjects = [...new Set(marks.map(m => m.subject))];    const users = await User.find({ studentId: { $in: studentIds } }).select('name studentId');    const userMap = Object.fromEntries(users.map(u => [u.studentId, u.name]));    const data = studentIds.map(studentId => {      const row = { studentId, name: userMap[studentId] || studentId };      for (const subject of subjects) {        const m = marks.find(mk => mk.studentId === studentId && mk.subject === subject);        if (m) {          const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);          row[subject] = Math.round((total / 160) * 100);        } else {          row[subject] = 0;        }      }           const vals = subjects.map(s => row[s] || 0);      row._avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;      return row;    });    data.sort((a, b) => a._avg - b._avg);    res.json({ students: studentIds, subjects, data });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const downloadClassReport = async (req, res) => {  try {    const classId = req.params.id;    const insights = await Insight.find({ classId });    const marks = await Marks.find({ classId });    const attendance = await Attendance.find({ classId });    const log = await UploadLog.findOne({ classId });    const doc = new PDFDocument({ margin: 40 });    res.setHeader('Content-Type', 'application/pdf');    res.setHeader('Content-Disposition', `attachment; filename="class-report-${classId}.pdf"`);    doc.pipe(res);    doc.fontSize(20).fillColor('#059669').text('UniSight Class Report', { align: 'center' });    doc.fontSize(12).fillColor('#333').text(`Class: ${classId}`, { align: 'center' });    doc.text(`Department: ${log?.department || 'N/A'} | Semester: ${log?.semester || 'N/A'}`, { align: 'center' });    doc.text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });    doc.moveDown();    const allScores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));    const classAvg = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;    const passCount = allScores.filter(s=>s>=40).length;    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;    doc.fontSize(14).fillColor('#059669').text('Class Summary');    doc.fontSize(11).fillColor('#333');    doc.text(`Total Students: ${insights.length}`);    doc.text(`Class Average Score: ${classAvg}/160`);    doc.text(`Pass Percentage: ${allScores.length ? Math.round(passCount/allScores.length*100) : 0}%`);    doc.text(`At Risk Students: ${atRiskCount}`);    doc.moveDown();    doc.fontSize(14).fillColor('#059669').text('At-Risk Students');    doc.fontSize(10).fillColor('#333');    for (const insight of insights.filter(i => i.riskLevel !== 'LOW')) {      doc.text(`[${insight.riskLevel}] ${insight.studentId}: ${insight.riskReason}`);    }    doc.end();  } catch (err) {    res.status(500).json({ error: 'PDF generation failed' });  }};export const getStudentFullProfile = async (req, res) => {  try {        const studentId = req.params.id;    const student = await User.findOne({ studentId }).select('-password');    const allMarks = await Marks.find({ studentId });    const allAttendance = await Attendance.find({ studentId });           const markMap = new Map();    for (const m of allMarks) markMap.set(m.subject, m);    const marks = Array.from(markMap.values());       const attMap = new Map();    for (const a of allAttendance) attMap.set(a.subject, a);    const attendance = Array.from(attMap.values());    const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });    const alerts = await Alert.find({ studentId }).sort({ sentAt: -1 }).limit(10);       const events = [];    for (const m of marks) {      const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);      if (total < 40) events.push({ date: m.createdAt.toISOString().split('T')[0], event: `${m.subject} score low (${total}/160)`, severity: 'danger' });    }    for (const a of attendance) {      if (a.percentage < 75) events.push({ date: a.createdAt.toISOString().split('T')[0], event: `Low attendance in ${a.subject} (${a.percentage}%)`, severity: 'warning' });    }    for (const al of alerts) {      events.push({ date: al.sentAt.toISOString().split('T')[0], event: `Alert: ${al.emailSubject}`, severity: 'info' });    }    events.sort((a, b) => new Date(b.date) - new Date(a.date));    const subjects = [...new Set(marks.map(m => m.subject))];    const marksTrend = ['UT1','MidSem','UT2','EndSem'].map((exam, i) => {      const scoreKeys = ['ut1','midSem','ut2','endSem'];      const row = { exam };      for (const sub of subjects) {        const m = marks.find(mk => mk.subject === sub);        row[sub] = m ? (m.scores[scoreKeys[i]] || 0) : 0;      }      return row;    });    res.json({      student: student ? { name: student.name, email: student.email, studentId: student.studentId, department: student.department } : { studentId },      marks: marks.map(m => ({        subject: m.subject,        scores: m.scores,        semester: m.semester,        classId: m.classId      })),      attendance: attendance.map(a => ({         subject: a.subject,         attended: a.attended,         total: a.total,         percentage: a.percentage,         status: a.percentage >= 85 ? 'safe' : a.percentage >= 75 ? 'warning' : 'danger'       })),      insight: insight ? {         riskLevel: insight.riskLevel,         riskReason: insight.riskReason,         recommendations: insight.recommendations,         cgpa: insight.cgpa,         classRank: insight.classRank,        classPercentile: insight.classPercentile,        dropoutProbabilityScore: insight.dropoutProbabilityScore,        dropoutTier: insight.dropoutTier      } : null,      timeline: { events },      alerts: alerts.map(a => ({ sentAt: a.sentAt, emailSubject: a.emailSubject })),    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getClassVoiceSummary = async (req, res) => {  try {    const { id: classId } = req.params;    const insights = await Insight.find({ classId });    if (!insights.length) {      return res.status(404).json({ error: 'No data for this class yet' });    }    const total = insights.length;    const atRisk = insights.filter(i => ['HIGH', 'CRITICAL'].includes(i.riskLevel)).length;    const passing = insights.filter(i => (i.cgpa || 0) >= 4).length;    const avgCgpa = (insights.reduce((s, i) => s + (i.cgpa || 0), 0) / total).toFixed(1);    const prompt = `Write a 40-word spoken summary for a faculty member about their class.Data: ${total} students, ${atRisk} high-risk, ${passing} passing, average CGPA ${avgCgpa}.Write as if speaking aloud. Natural sentences. No bullet points. No markdown.Start with: "Here is your class summary."`;    let summary;    try {      summary = await callGemini(prompt, { maxTokens: 100, temperature: 0.3 });    } catch (geminiErr) {      console.error('[VoiceSummary] Gemini failed:', geminiErr.message);      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });    }    let audioData = null;    try {      audioData = await textToSpeech(summary);    } catch (voiceErr) {      console.warn('[VoiceSummary] TTS failed:', voiceErr.message);    }    res.json({      summary,      audio: audioData,      voiceAvailable: !!audioData,    });  } catch (err) {    res.status(500).json({ error: 'Could not generate voice summary' });  }};export const getFacultyEffectiveness = async (req, res) => {  try {    const facultyId = req.user.userId;    const facultyUser = await User.findById(facultyId).select('department');           const dept = facultyUser?.department;    const insights = await Insight.find(dept ? { department: dept } : {});    const classes = [...new Set(insights.map(i => i.classId))];       let scores = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 });    if (scores.length === 0 && insights.length > 0) {             const total = insights.length;       const atRisk = insights.filter(i => i.riskLevel !== 'LOW').length;       const passRate = insights.length ? Math.round(insights.filter(i => (i.cgpa || 0) >= 4).length / total * 100) : 0;       const baseScore = Math.min(100, Math.max(0, passRate - (atRisk/total * 50) + 20));       const first = await TeacherInsight.create({         facultyId,         classId: classes[0] || 'GENERAL',         department: dept || 'N/A',         semester: 4,         effectivenessScore: Math.round(baseScore),         classPassRate: passRate,         studentCount: total,         effectivenessSummary: `Based on current class performance with a ${passRate}% pass rate.`,         scoreChangeVsPrevSem: 0       });       scores = [first];    }        const history = scores.map((ins, idx) => ({      period: ins.createdAt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),      score: ins.effectivenessScore || 0,      badge: ins.effectivenessScore >= 85 ? 'Excellent' : ins.effectivenessScore >= 70 ? 'Good' : 'Developing',      studentPassRate: ins.classPassRate || 0,      avgImprovement: ins.scoreChangeVsPrevSem || 0,      studentCount: ins.studentCount || 0    }));        const latest = scores[scores.length - 1];    const overall = latest ? {      score: latest.effectivenessScore || 0,      badge: latest.effectivenessScore >= 85 ? 'Excellent' : latest.effectivenessScore >= 70 ? 'Good' : 'Developing',      studentPassRate: latest.classPassRate || 0,      avgImprovement: latest.scoreChangeVsPrevSem || 0    } : { score: 0, badge: 'New', studentPassRate: 0, avgImprovement: 0 };        res.json({ overall, history });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};export const getStudentLongitudinal = async (req, res) => {  try {    const studentId = req.params.id;    const insights = await Insight.find({ studentId }).sort({ semester: 1 });          const semMap = new Map();    for (const i of insights) {       semMap.set(i.semester || 4, i);    }    const uniqueInsights = Array.from(semMap.values()).sort((a,b) => (a.semester||4) - (b.semester||4));    const semesters = uniqueInsights.map(i => ({      semester: i.semester || 4, classId: i.classId, cgpa: i.cgpa,      dropoutProbabilityScore: i.dropoutProbabilityScore,      dropoutTier: i.dropoutTier, participationScore: i.participationScore,    }));    const current = uniqueInsights.length ? uniqueInsights[uniqueInsights.length - 1] : null;    res.json({      semesters,      currentSemester: current?.semester || 4,      trend: semesters.length >= 2 ? (semesters[semesters.length - 1].cgpa > semesters[semesters.length - 2].cgpa ? 'up' : 'down') : 'stable',      consecutiveAtRiskSemesters: current?.consecutiveAtRiskSemesters || 0    });  } catch (err) {    res.status(500).json({ error: 'Server error' });  }};
+import User from '../models/User.js';
+import Marks from '../models/Marks.js';
+import Attendance from '../models/Attendance.js';
+import Insight from '../models/Insight.js';
+import Alert from '../models/Alert.js';
+import UploadLog from '../models/UploadLog.js';
+import TeacherInsight from '../models/TeacherInsight.js';
+import PDFDocument from 'pdfkit';
+import { callGemini } from '../services/geminiService.js';
+import { textToSpeech } from '../services/voiceService.js';
+
+/**
+ * Shared helper: get latest insight + filtered marks/attendance for a student.
+ */
+async function getStudentContext(studentId) {
+  const insight = await Insight.findOne({ studentId }).sort({ createdAt: -1 });
+  const latestClassId = insight?.classId;
+  const latestSemester = insight?.semester;
+
+  let marksQuery = { studentId };
+  let attQuery = { studentId };
+  if (latestClassId) {
+    marksQuery.classId = latestClassId;
+    attQuery.classId = latestClassId;
+  } else if (latestSemester) {
+    marksQuery.semester = latestSemester;
+    attQuery.semester = latestSemester;
+  }
+
+  const marks = await Marks.find(marksQuery);
+  const attendance = await Attendance.find(attQuery);
+
+  return { insight, marks, attendance, latestClassId, latestSemester };
+}
+
+export const getFacultyDashboard = async (req, res) => {
+  try {
+    const latestCompleteLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' }).sort({ createdAt: -1 });
+    const recentUploads = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).limit(5);
+
+    const latestUploadKpi = latestCompleteLog
+      ? { processed: latestCompleteLog.studentCount || 0, atRiskFound: latestCompleteLog.pendingAlerts?.length || 0, improvements: 0 }
+      : null;
+
+    let proactiveAlerts = [];
+    if (latestCompleteLog && latestCompleteLog.pendingAlerts?.length) {
+      const studentIds = latestCompleteLog.pendingAlerts.slice(0, 5);
+      proactiveAlerts = await Promise.all(studentIds.map(async (id) => {
+        const user = await User.findOne({ studentId: id }).select('name department').lean();
+        const insight = await Insight.findOne({ studentId: id }).sort({ createdAt: -1 }).lean();
+        return {
+          studentId: id,
+          name: user?.name || id,
+          riskLevel: insight?.riskLevel || 'HIGH',
+          dropoutTier: insight?.dropoutTier || 'HIGH',
+          reason: insight?.riskReason || 'Performance needs review',
+          riskReason: insight?.riskReason || 'Performance needs review',
+        };
+      }));
+    } else {
+      const facultyUser = await User.findById(req.user.userId).select('department');
+      const dept = facultyUser?.department;
+      const riskInsights = await Insight.find(
+        dept ? { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] }, department: dept }
+             : { riskLevel: { $in: ['HIGH', 'MEDIUM', 'CRITICAL'] } }
+      ).sort({ dropoutProbabilityScore: -1 }).limit(6).lean();
+      proactiveAlerts = await Promise.all(riskInsights.map(async (ins) => {
+        const user = await User.findOne({ studentId: ins.studentId }).select('name').lean();
+        return {
+          studentId: ins.studentId,
+          name: user?.name || ins.studentId,
+          riskLevel: ins.riskLevel,
+          dropoutTier: ins.dropoutTier || ins.riskLevel,
+          reason: ins.riskReason || 'Performance needs review',
+          riskReason: ins.riskReason || 'Performance needs review',
+        };
+      }));
+    }
+
+    res.json({
+      latestUploadKpi,
+      recentUploads: recentUploads.map(u => ({
+        _id: u._id,
+        filename: u.originalFilename,
+        date: u.createdAt,
+        status: u.status?.toUpperCase() || 'PENDING',
+        entries: u.studentCount || 0,
+        errors: u.errorCount || 0,
+      })),
+      proactiveAlerts,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const sendStudentAlert = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+    const student = await User.findOne({ studentId }).select('name email');
+    const ctx = await getStudentContext(studentId);
+
+    const marksSummary = ctx.marks.map(m => {
+      const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);
+      return `${m.subject}: ${total}/160`;
+    }).join(', ');
+    const attSummary = ctx.attendance.map(a => `${a.subject}: ${a.percentage}%`).join(', ');
+
+    const prompt = `You are a university teacher. Write a professional, empathetic email to a student named ${student?.name || studentId} about their academic performance.
+Student data:
+- Risk Level: ${ctx.insight?.riskLevel || 'MEDIUM'}
+- Risk Reason: ${ctx.insight?.riskReason || 'Poor academic performance'}
+- Marks: ${marksSummary || 'No marks data'}
+- Attendance: ${attSummary || 'No attendance data'}
+Write a 150-200 word email that is warm but firm, explaining the concern and requesting them to take corrective action. Include a subject line at the top.`;
+
+    let emailText;
+    try {
+      emailText = await callGemini(prompt, { maxTokens: 400 });
+    } catch (geminiErr) {
+      console.error('[SendAlert] Gemini failed:', geminiErr.message);
+      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });
+    }
+
+    await Alert.create({
+      studentId,
+      facultyId: req.user.userId,
+      emailSubject: `Academic Performance Alert — ${studentId}`,
+      emailBody: emailText,
+      sentAt: new Date(),
+    });
+
+    res.json({ success: true, emailDraft: emailText, sentTo: student?.name || studentId });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate alert: ' + err.message });
+  }
+};
+
+export const getMyClasses = async (req, res) => {
+  try {
+    const facultyUser = await User.findById(req.user.userId).select('department');
+    const dept = facultyUser?.department;
+
+    const logs = await UploadLog.find({ facultyId: req.user.userId }).sort({ createdAt: -1 }).lean();
+    const insights = await Insight.find(dept ? { department: dept } : {}).lean();
+
+    const classMap = {};
+
+    for (const ins of insights) {
+      const cid = ins.classId;
+      if (!cid) continue;
+      if (!classMap[cid]) {
+        classMap[cid] = {
+          classId: cid,
+          department: ins.department || dept,
+          semester: ins.semester || 4,
+          studentCount: 0,
+          atRiskCount: 0,
+          uploadedAt: ins.createdAt,
+          status: 'complete',
+        };
+      }
+      classMap[cid].studentCount++;
+      if (ins.riskLevel && ins.riskLevel !== 'LOW') classMap[cid].atRiskCount++;
+    }
+
+    for (const log of logs) {
+      if (!classMap[log.classId]) {
+        classMap[log.classId] = {
+          classId: log.classId,
+          department: log.department,
+          semester: log.semester || 4,
+          studentCount: log.studentCount || 0,
+          atRiskCount: log.pendingAlerts?.length || 0,
+          uploadedAt: log.createdAt,
+          status: log.status,
+        };
+      } else {
+        classMap[log.classId].status = log.status;
+        if (log.studentCount > 0) classMap[log.classId].studentCount = log.studentCount;
+      }
+    }
+
+    const classes = Object.values(classMap).sort((a,b) => b.uploadedAt - a.uploadedAt);
+    res.json({ classes });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getPendingAlerts = async (req, res) => {
+  try {
+    const latestLog = await UploadLog.findOne({ facultyId: req.user.userId, status: 'complete' })
+      .sort({ createdAt: -1 });
+
+    let studentIds = [];
+    let sourceClassId = null;
+    if (latestLog && latestLog.pendingAlerts?.length) {
+      studentIds = latestLog.pendingAlerts;
+      sourceClassId = latestLog.classId;
+    } else {
+      const facultyUser = await User.findById(req.user.userId).select('department');
+      const dept = facultyUser?.department;
+      const riskInsights = await Insight.find(
+        dept
+          ? { riskLevel: { $in: ['HIGH', 'MEDIUM'] }, department: dept }
+          : { riskLevel: { $in: ['HIGH', 'MEDIUM'] } }
+      ).sort({ riskLevel: 1, cgpa: 1 }).limit(20);
+      studentIds = riskInsights.map(i => i.studentId);
+    }
+
+    if (!studentIds.length) {
+      return res.json({ hasAlerts: false, count: 0, students: [] });
+    }
+
+    const studentData = await Promise.all(
+      studentIds.slice(0, 20).map(async (studentId) => {
+        const user = await User.findOne({ studentId }).select('name studentId');
+        const ctx = await getStudentContext(studentId);
+
+        const scores = ctx.marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
+        const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100/160) : 0;
+        const avgAttendance = ctx.attendance.length
+          ? Math.round(ctx.attendance.reduce((a,b)=>a+b.percentage,0)/ctx.attendance.length) : 0;
+
+        return {
+          studentId,
+          name: user?.name || studentId,
+          riskLevel: ctx.insight?.riskLevel || 'MEDIUM',
+          riskReason: ctx.insight?.riskReason || 'At-risk flagged by system',
+          classId: sourceClassId || ctx.insight?.classId || null,
+          avgScore,
+          avgAttendance,
+          dropoutProbabilityScore: ctx.insight?.dropoutProbabilityScore || null,
+          dropoutTier: ctx.insight?.dropoutTier || null,
+        };
+      })
+    );
+
+    studentData.sort((a, b) => {
+      const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+      return (order[a.riskLevel] ?? 2) - (order[b.riskLevel] ?? 2);
+    });
+
+    res.json({ hasAlerts: studentData.length > 0, count: studentData.length, students: studentData });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getClassSummary = async (req, res) => {
+  try {
+    const classId = req.params.id;
+    const insights = await Insight.find({ classId });
+    const marks = await Marks.find({ classId });
+    const attendance = await Attendance.find({ classId });
+
+    const totalStudents = insights.length;
+    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;
+    const allScores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
+    const classAvgScore = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;
+    const passPercent = allScores.length ? Math.round(allScores.filter(s=>s>=40).length/allScores.length*100) : 0;
+    const belowAttendanceCount = attendance.filter(a => a.percentage < 75).length;
+
+    const atRiskStudents = await Promise.all(
+      insights.filter(i => i.riskLevel !== 'LOW').map(async (insight) => {
+        const user = await User.findOne({ studentId: insight.studentId }).select('name');
+        const stuMarks = marks.filter(m => m.studentId === insight.studentId);
+        const stuScores = stuMarks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
+        const avgScore = stuScores.length ? Math.round(stuScores.reduce((a,b)=>a+b,0)/stuScores.length) : 0;
+        const stuAtt = attendance.filter(a => a.studentId === insight.studentId);
+        const avgAttendance = stuAtt.length ? Math.round(stuAtt.reduce((a,b)=>a+b.percentage,0)/stuAtt.length) : 0;
+        return {
+          studentId: insight.studentId,
+          name: user?.name || insight.studentId,
+          riskLevel: insight.riskLevel,
+          riskReason: insight.riskReason,
+          avgScore,
+          avgAttendance,
+          dropoutProbabilityScore: insight.dropoutProbabilityScore || null,
+          dropoutTier: insight.dropoutTier || null,
+          trend: avgScore < 50 ? 'down' : 'same',
+        };
+      })
+    );
+
+    const students = await Promise.all(
+      insights.map(async (ins) => {
+        const user = await User.findOne({ studentId: ins.studentId }).select('name');
+        return {
+          studentId: ins.studentId,
+          name: user?.name || ins.studentId,
+          dropoutTier: ins.dropoutTier || ins.riskLevel || 'LOW',
+          cgpa: ins.cgpa || 0,
+        };
+      })
+    );
+
+    const heatmap = marks.slice(0, 20).map((m) => ({
+      studentId: m.studentId,
+      subject: m.subject,
+      score: (m.scores?.ut1 || 0) + (m.scores?.midSem || 0) + (m.scores?.ut2 || 0) + (m.scores?.endSem || 0),
+    }));
+
+    const narrative = `Class ${classId} has ${atRiskCount} at-risk students out of ${totalStudents}. ${atRiskCount > 0 ? 'Performance review recommended for flagged students.' : 'Class performance is stable.'}`;
+
+    res.json({
+      students,
+      heatmap,
+      narrative,
+      kpi: { classAvgScore, passPercent, atRiskCount, belowAttendanceCount, totalStudents },
+      atRiskStudents,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getClassHeatmap = async (req, res) => {
+  try {
+    const classId = req.params.id;
+    const marks = await Marks.find({ classId });
+
+    const studentIds = [...new Set(marks.map(m => m.studentId))];
+    const subjects = [...new Set(marks.map(m => m.subject))];
+
+    const users = await User.find({ studentId: { $in: studentIds } }).select('name studentId');
+    const userMap = Object.fromEntries(users.map(u => [u.studentId, u.name]));
+
+    const data = studentIds.map(studentId => {
+      const row = { studentId, name: userMap[studentId] || studentId };
+      for (const subject of subjects) {
+        const m = marks.find(mk => mk.studentId === studentId && mk.subject === subject);
+        if (m) {
+          const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);
+          row[subject] = Math.round((total / 160) * 100);
+        } else {
+          row[subject] = 0;
+        }
+      }
+      const vals = subjects.map(s => row[s] || 0);
+      row._avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+      return row;
+    });
+
+    data.sort((a, b) => a._avg - b._avg);
+    res.json({ students: studentIds, subjects, data });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const downloadClassReport = async (req, res) => {
+  try {
+    const classId = req.params.id;
+    const insights = await Insight.find({ classId });
+    const marks = await Marks.find({ classId });
+    const attendance = await Attendance.find({ classId });
+    const log = await UploadLog.findOne({ classId });
+
+    const doc = new PDFDocument({ margin: 40 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="class-report-${classId}.pdf"`);
+    doc.pipe(res);
+
+    doc.fontSize(20).fillColor('#059669').text('UniSight Class Report', { align: 'center' });
+    doc.fontSize(12).fillColor('#333').text(`Class: ${classId}`, { align: 'center' });
+    doc.text(`Department: ${log?.department || 'N/A'} | Semester: ${log?.semester || 'N/A'}`, { align: 'center' });
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    doc.moveDown();
+
+    const allScores = marks.map(m => (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0));
+    const classAvg = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;
+    const passCount = allScores.filter(s=>s>=40).length;
+    const atRiskCount = insights.filter(i => i.riskLevel !== 'LOW').length;
+
+    doc.fontSize(14).fillColor('#059669').text('Class Summary');
+    doc.fontSize(11).fillColor('#333');
+    doc.text(`Total Students: ${insights.length}`);
+    doc.text(`Class Average Score: ${classAvg}/160`);
+    doc.text(`Pass Percentage: ${allScores.length ? Math.round(passCount/allScores.length*100) : 0}%`);
+    doc.text(`At Risk Students: ${atRiskCount}`);
+    doc.moveDown();
+
+    doc.fontSize(14).fillColor('#059669').text('At-Risk Students');
+    doc.fontSize(10).fillColor('#333');
+    for (const insight of insights.filter(i => i.riskLevel !== 'LOW')) {
+      doc.text(`[${insight.riskLevel}] ${insight.studentId}: ${insight.riskReason}`);
+    }
+
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ error: 'PDF generation failed' });
+  }
+};
+
+export const getStudentFullProfile = async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const student = await User.findOne({ studentId }).select('-password');
+
+    // Use getStudentContext to get latest-semester filtered data
+    const ctx = await getStudentContext(studentId);
+    const { marks, attendance, insight } = ctx;
+
+    const alerts = await Alert.find({ studentId }).sort({ sentAt: -1 }).limit(10);
+
+    const events = [];
+    for (const m of marks) {
+      const total = (m.scores.ut1||0)+(m.scores.midSem||0)+(m.scores.ut2||0)+(m.scores.endSem||0);
+      if (total < 40) events.push({ date: m.createdAt.toISOString().split('T')[0], event: `${m.subject} score low (${total}/160)`, severity: 'danger' });
+    }
+    for (const a of attendance) {
+      if (a.percentage < 75) events.push({ date: a.createdAt.toISOString().split('T')[0], event: `Low attendance in ${a.subject} (${a.percentage}%)`, severity: 'warning' });
+    }
+    for (const al of alerts) {
+      events.push({ date: al.sentAt.toISOString().split('T')[0], event: `Alert: ${al.emailSubject}`, severity: 'info' });
+    }
+    events.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const subjects = [...new Set(marks.map(m => m.subject))];
+    const marksTrend = ['UT1','MidSem','UT2','EndSem'].map((exam, i) => {
+      const scoreKeys = ['ut1','midSem','ut2','endSem'];
+      const row = { exam };
+      for (const sub of subjects) {
+        const m = marks.find(mk => mk.subject === sub);
+        row[sub] = m ? (m.scores[scoreKeys[i]] || 0) : 0;
+      }
+      return row;
+    });
+
+    res.json({
+      student: student ? { name: student.name, email: student.email, studentId: student.studentId, department: student.department } : { studentId },
+      marks: marks.map(m => ({
+        subject: m.subject,
+        scores: m.scores,
+        semester: m.semester,
+        classId: m.classId
+      })),
+      attendance: attendance.map(a => ({
+        subject: a.subject,
+        attended: a.attended,
+        total: a.total,
+        percentage: a.percentage,
+        status: a.percentage >= 85 ? 'safe' : a.percentage >= 75 ? 'warning' : 'danger'
+      })),
+      insight: insight ? {
+        riskLevel: insight.riskLevel,
+        riskReason: insight.riskReason,
+        recommendations: insight.recommendations,
+        cgpa: insight.cgpa,
+        classRank: insight.classRank,
+        classPercentile: insight.classPercentile,
+        dropoutProbabilityScore: insight.dropoutProbabilityScore,
+        dropoutTier: insight.dropoutTier
+      } : null,
+      timeline: { events },
+      alerts: alerts.map(a => ({ sentAt: a.sentAt, emailSubject: a.emailSubject })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getClassVoiceSummary = async (req, res) => {
+  try {
+    const { id: classId } = req.params;
+    const insights = await Insight.find({ classId });
+    if (!insights.length) {
+      return res.status(404).json({ error: 'No data for this class yet' });
+    }
+
+    const total = insights.length;
+    const atRisk = insights.filter(i => ['HIGH', 'CRITICAL'].includes(i.riskLevel)).length;
+    const passing = insights.filter(i => (i.cgpa || 0) >= 4).length;
+    const avgCgpa = (insights.reduce((s, i) => s + (i.cgpa || 0), 0) / total).toFixed(1);
+
+    const prompt = `
+Write a 40-word spoken summary for a faculty member about their class.
+Data: ${total} students, ${atRisk} high-risk, ${passing} passing, average CGPA ${avgCgpa}.
+Write as if speaking aloud. Natural sentences. No bullet points. No markdown.
+Start with: "Here is your class summary."
+`;
+
+    let summary;
+    try {
+      summary = await callGemini(prompt, { maxTokens: 100, temperature: 0.3 });
+    } catch (geminiErr) {
+      console.error('[VoiceSummary] Gemini failed:', geminiErr.message);
+      return res.status(500).json({ error: 'AI Error: ' + geminiErr.message });
+    }
+
+    let audioData = null;
+    try {
+      audioData = await textToSpeech(summary);
+    } catch (voiceErr) {
+      console.warn('[VoiceSummary] TTS failed:', voiceErr.message);
+    }
+
+    res.json({
+      summary,
+      audio: audioData,
+      voiceAvailable: !!audioData,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not generate voice summary' });
+  }
+};
+
+export const getFacultyEffectiveness = async (req, res) => {
+  try {
+    const facultyId = req.user.userId;
+    const facultyUser = await User.findById(facultyId).select('department');
+
+    const dept = facultyUser?.department;
+    const insights = await Insight.find(dept ? { department: dept } : {});
+    const classes = [...new Set(insights.map(i => i.classId))];
+
+    let scores = await TeacherInsight.find({ facultyId }).sort({ createdAt: 1 });
+    if (scores.length === 0 && insights.length > 0) {
+       const total = insights.length;
+       const atRisk = insights.filter(i => i.riskLevel !== 'LOW').length;
+       const passRate = insights.length ? Math.round(insights.filter(i => (i.cgpa || 0) >= 4).length / total * 100) : 0;
+       const baseScore = Math.min(100, Math.max(0, passRate - (atRisk/total * 50) + 20));
+       const first = await TeacherInsight.create({
+         facultyId,
+         classId: classes[0] || 'GENERAL',
+         department: dept || 'N/A',
+         semester: 4,
+         effectivenessScore: Math.round(baseScore),
+         classPassRate: passRate,
+         studentCount: total,
+         effectivenessSummary: `Based on current class performance with a ${passRate}% pass rate.`,
+         scoreChangeVsPrevSem: 0
+       });
+       scores = [first];
+    }
+
+    const history = scores.map((ins, idx) => ({
+      period: ins.createdAt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      score: ins.effectivenessScore || 0,
+      badge: ins.effectivenessScore >= 85 ? 'Excellent' : ins.effectivenessScore >= 70 ? 'Good' : 'Developing',
+      studentPassRate: ins.classPassRate || 0,
+      avgImprovement: ins.scoreChangeVsPrevSem || 0,
+      studentCount: ins.studentCount || 0
+    }));
+
+    const latest = scores[scores.length - 1];
+    const overall = latest ? {
+      score: latest.effectivenessScore || 0,
+      badge: latest.effectivenessScore >= 85 ? 'Excellent' : latest.effectivenessScore >= 70 ? 'Good' : 'Developing',
+      studentPassRate: latest.classPassRate || 0,
+      avgImprovement: latest.scoreChangeVsPrevSem || 0
+    } : { score: 0, badge: 'New', studentPassRate: 0, avgImprovement: 0 };
+
+    res.json({ overall, history });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getStudentLongitudinal = async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const insights = await Insight.find({ studentId }).sort({ semester: 1 });
+
+    const semMap = new Map();
+    for (const i of insights) {
+       semMap.set(i.semester || 4, i);
+    }
+    const uniqueInsights = Array.from(semMap.values()).sort((a,b) => (a.semester||4) - (b.semester||4));
+
+    const semesters = uniqueInsights.map(i => ({
+      semester: i.semester || 4, classId: i.classId, cgpa: i.cgpa,
+      dropoutProbabilityScore: i.dropoutProbabilityScore,
+      dropoutTier: i.dropoutTier, participationScore: i.participationScore,
+    }));
+    const current = uniqueInsights.length ? uniqueInsights[uniqueInsights.length - 1] : null;
+
+    res.json({
+      semesters,
+      currentSemester: current?.semester || 4,
+      trend: semesters.length >= 2 ? (semesters[semesters.length - 1].cgpa > semesters[semesters.length - 2].cgpa ? 'up' : 'down') : 'stable',
+      consecutiveAtRiskSemesters: current?.consecutiveAtRiskSemesters || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};

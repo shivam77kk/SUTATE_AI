@@ -1,6 +1,6 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import api from '@/lib/axios';
@@ -24,20 +24,30 @@ const itemVariants = {
 
 export default function FacultyDashboard() {
   const { user } = useAuthStore();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['faculty-dashboard'] });
+    qc.invalidateQueries({ queryKey: ['faculty-effectiveness'] });
+    qc.invalidateQueries({ queryKey: ['faculty-classes'] });
+  }, []);
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['faculty-dashboard'],
     queryFn: () => api.get('/faculty/dashboard').then(r => r.data),
+    staleTime: 0,
   });
 
   const { data: effectiveness } = useQuery({
     queryKey: ['faculty-effectiveness'],
     queryFn: () => api.get('/faculty/effectiveness').then(r => r.data),
+    staleTime: 0,
   });
   
   const { data: classesData } = useQuery({
     queryKey: ['faculty-classes'],
     queryFn: () => api.get('/faculty/classes').then(r => r.data),
+    staleTime: 0,
   });
 
   if (isLoading) return (

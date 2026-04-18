@@ -1,6 +1,6 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -27,9 +27,16 @@ const itemVariants = {
 };
 
 export default function AdminOverview() {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['admin-overview'] });
+  }, []);
+
   const { data: overview, isLoading } = useQuery({
     queryKey: ['admin-overview'],
     queryFn: () => api.get('/admin/overview').then(r => r.data),
+    staleTime: 0,
   });
 
   if (isLoading) return (
