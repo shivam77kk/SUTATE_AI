@@ -18,7 +18,7 @@ export default function BulkUserPage() {
     onSuccess: (data) => {
       setResults(data);
       qc.invalidateQueries(['admin-users']);
-      if (data.successful > 0) toast.success(`Successfully imported ${data.successful} users`);
+      if (data.created > 0) toast.success(`Successfully imported ${data.created} users`);
       if (data.errors?.length > 0) toast.error(`${data.errors.length} errors found`);
     },
     onError: (err) => {
@@ -143,7 +143,7 @@ export default function BulkUserPage() {
               <div className="chart-title">Import Results</div>
               <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
                 <div style={{ padding: '10px 16px', background: 'rgba(16,185,129,0.1)', borderRadius: 8, flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#10b981' }}>{results.successful || 0}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#10b981' }}>{results.created || 0}</div>
                   <div style={{ fontSize: 12, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Imported</div>
                 </div>
                 <div style={{ padding: '10px 16px', background: 'rgba(244,63,94,0.1)', borderRadius: 8, flex: 1, textAlign: 'center' }}>
