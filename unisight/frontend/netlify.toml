@@ -1,0 +1,7 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NEXT_PUBLIC_API_URL = "https://sutate-ai.onrender.com"
+  NEXT_PUBLIC_BACKEND_URL = "https://sutate-ai.onrender.com"
