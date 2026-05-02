@@ -132,7 +132,16 @@ app.use('/api/admin/bulk', bulkRoutes);
 app.use('/api/parent', parentRoutes);
 app.use('/api/teacher-insights', teacherInsightRoutes);
 app.use('/api/admin/logs', adminLogRoutes);
-app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
+app.get('/api/health', (_, res) => res.json({ 
+  status: 'ok', 
+  database: global.dbConnected ? 'connected' : 'disconnected',
+  env: {
+    hasJwtSecret: !!process.env.JWT_SECRET,
+    nodeEnv: process.env.NODE_ENV
+  },
+  time: new Date() 
+}));
+
 app.use((req, res) => res.status(404).json({ error: `Route ${req.path} not found` }));
 app.use((err, _req, res, _next) => {
   console.error('[Server Error]', err.message);
