@@ -3,9 +3,13 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 export const login = async (req, res) => {
   try {
+    if (!global.dbConnected) {
+      return res.status(500).json({ error: 'Database is disconnected. Please check your Render environment variables (MONGODB_URI).' });
+    }
     const { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password are required' });
+
     const emailLower = email.toLowerCase();
     const user = await User.findOne({ email: emailLower });
     console.log(`[Login] Email: ${emailLower}, User found: ${!!user}, Role: ${user?.role}`);

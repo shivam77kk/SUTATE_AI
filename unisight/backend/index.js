@@ -137,6 +137,7 @@ app.get('/api/health', (_, res) => res.json({
   database: global.dbConnected ? 'connected' : 'disconnected',
   env: {
     hasJwtSecret: !!process.env.JWT_SECRET,
+    hasMongoUri: !!process.env.MONGODB_URI,
     nodeEnv: process.env.NODE_ENV
   },
   time: new Date() 
