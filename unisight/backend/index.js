@@ -40,15 +40,17 @@ export const io = new Server(server, {
         'http://localhost:3000',
         'https://sutate-ai.vercel.app',
         'https://sutate-ai.onrender.com',
-        ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
-        ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim()) : [])
+        ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim().replace(/\/$/, '')) : []),
+        ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim().replace(/\/$/, '')) : [])
       ];
-      if (!origin || allowed.includes(origin) || allowed.some(ao => origin.startsWith(ao))) {
+      const normalizedOrigin = origin ? origin.replace(/\/$/, '') : null;
+      if (!origin || allowed.includes(normalizedOrigin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
       }
     },
+
     credentials: true,
     methods: ['GET', 'POST'],
   },
@@ -66,20 +68,22 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://sutate-ai.vercel.app',
   'https://sutate-ai.onrender.com',
-  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
-  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim()) : [])
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim().replace(/\/$/, '')) : []),
+  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim().replace(/\/$/, '')) : [])
 ];
+
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.some(ao => origin.startsWith(ao))) {
+    const normalizedOrigin = origin ? origin.replace(/\/$/, '') : null;
+    if (!origin || allowedOrigins.includes(normalizedOrigin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
+
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
