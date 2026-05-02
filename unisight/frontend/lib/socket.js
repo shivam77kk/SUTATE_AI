@@ -23,8 +23,12 @@ let socket;
 
 export function getSocket() {
   if (!socket) {
-    // 🚀 HARDCODED RENDER URL: Bypassing Netlify's environment variables entirely
-    socket = io('https://sutate-ai.onrender.com', {
+    // 🚀 FLEXIBLE URL: Bypassing hardcoded URLs when env vars are present
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+                     process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 
+                     'https://sutate-ai.onrender.com';
+
+    socket = io(socketUrl, {
       withCredentials: true,
       // 🛡️ FALLBACK ADDED: 'polling' guarantees connection even on strict university Wi-Fi
       transports: ['polling', 'websocket'], 

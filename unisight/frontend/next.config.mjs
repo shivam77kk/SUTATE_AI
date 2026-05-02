@@ -13,9 +13,9 @@ const nextConfig = {
     return [
       { 
         source: '/api-proxy/:path*', 
-        // We are hardcoding the Render URL so Netlify never guesses localhost
-        destination: 'https://sutate-ai.onrender.com/api/:path*' 
+        destination: (process.env.NEXT_PUBLIC_API_URL || 'https://sutate-ai.onrender.com/api') + '/:path*'
       },
+
     ];
   },
 };

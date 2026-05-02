@@ -2,7 +2,8 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 // 🚀 DIRECT RENDER CONNECTION (Bypassing Netlify Proxy)
-const baseURL = 'https://sutate-ai.onrender.com/api'; 
+// 🚀 FLEXIBLE CONNECTION: Uses env var on Vercel, fallbacks to Render
+const baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://sutate-ai.onrender.com/api'; 
 
 const api = axios.create({
   baseURL,

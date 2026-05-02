@@ -35,12 +35,26 @@ const server = createServer(app);
 global.dbConnected = false;
 export const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      const allowed = [
+        'http://localhost:3000',
+        'https://sutate-ai.vercel.app',
+        'https://sutate-ai.onrender.com',
+        ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
+        ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim()) : [])
+      ];
+      if (!origin || allowed.includes(origin) || allowed.some(ao => origin.startsWith(ao))) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST'],
   },
   pingTimeout: 60000,
 });
+
 io.on('connection', (socket) => {
   socket.on('join-upload', (id) => socket.join(id));
   socket.on('join-faculty', (id) => socket.join(`faculty-${id}`));
@@ -48,10 +62,36 @@ io.on('connection', (socket) => {
   socket.on('join-user', (id) => socket.join(`user-${id}`));
   socket.on('disconnect', () => {});
 });
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://sutate-ai.vercel.app',
+  'https://sutate-ai.onrender.com',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
+  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(o => o.trim()) : [])
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.some(ao => origin.startsWith(ao))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
+
+// Also update socket.io CORS
+io.engine.on("initial_headers", (headers, req) => {
+  if (req.headers.origin) {
+    headers["Access-Control-Allow-Origin"] = req.headers.origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+});
+
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(cookieParser());
